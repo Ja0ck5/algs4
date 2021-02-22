@@ -2,6 +2,8 @@ package study.binarytree;
 
 public class TreeNode {
 
+    public TreeNode parent;
+
     public TreeNode left;
 
     public TreeNode right;
@@ -14,6 +16,14 @@ public class TreeNode {
 
     public void setVal(Integer val) {
         this.val = val;
+    }
+
+    public TreeNode getParent() {
+        return parent;
+    }
+
+    public void setParent(TreeNode parent) {
+        this.parent = parent;
     }
 
     public TreeNode getLeft() {
