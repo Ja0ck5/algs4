@@ -59,10 +59,7 @@ public class LowestCommonAncestor {
         if (left != null) {
             return left;
         }
-        if (right != null) {
-            return right;
-        }
-        return null;
+        return right;
     }
 
     public TreeNode lowestCommonAncestorVersion2(TreeNode node1, TreeNode node2) {
