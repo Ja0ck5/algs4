@@ -3,8 +3,8 @@ package study.binarytree.dfs;
 import study.binarytree.TreeNode;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Stack;
 
 public class OrderTraversal {
 
@@ -39,6 +39,26 @@ public class OrderTraversal {
         result.addAll(right);
 
         return result;
+    }
+
+    public List<Integer> preorderTraversalVersion2(TreeNode root) {
+        Stack<TreeNode> stack = new Stack<>();
+        List<Integer> results = new ArrayList<>();
+        if (root == null) {
+            return results;
+        }
+        stack.push(root);
+        while (!stack.isEmpty()) {
+            TreeNode node = stack.pop();
+            results.add(node.val);
+            if (node.right != null) {
+                stack.push(node.right);
+            }
+            if (node.left != null) {
+                stack.push(node.left);
+            }
+        }
+        return results;
     }
 
 }
