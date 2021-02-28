@@ -10,6 +10,10 @@ public class TreeNode {
 
     public Integer val;
 
+    public TreeNode(Integer val) {
+        this.val = val;
+    }
+
     public Integer getVal() {
         return val;
     }
