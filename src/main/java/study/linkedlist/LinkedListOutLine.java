@@ -11,6 +11,8 @@ package study.linkedlist;
  * - Find a middle of a linked list
  *
  * 3. Fast Slow Point
+ *
+ * https://leetcode-cn.com/leetbook/read/linked-list
  */
 public class LinkedListOutLine {
 }
