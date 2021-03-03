@@ -6,15 +6,21 @@ package study.dynamic;
  * - 序列上的动态规划
  * - 动态规划的分类
  * 1. Matrix DP
+ * - state[x][y]
+ * - function 研究走到 [x][y] 的上一步
+ * - initialize 初始化(起点)
+ * - answer (终点)
+ * <p>
+ * <p>
  * 2. Sequence
  * 3. Two Sequence DP
  * 4. BackPack
- *
+ * <p>
  * - 如何使用动态规划
  * 1. 求最大最小
  * 2. 求 true / false
  * 3. 求 解的个数
- *
+ * <p>
  * 动态规划4要素
  * 1. 状态(存储小规模问题的结果)
  * 2. 方程 Function(如何通过小的结果求大的结果)
