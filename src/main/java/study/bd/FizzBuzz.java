@@ -28,7 +28,7 @@ import java.util.List;
 public class FizzBuzz {
     /**
      * @param n: An integer
-     * @return: A list of strings.
+     * @return: A list of strings.swapPairs
      */
     public List<String> fizzBuzz(int n) {
         // write your code here
