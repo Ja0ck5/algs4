@@ -22,15 +22,16 @@ public class BinaryTreeMaxDistance {
         int maxDistance = Math.max(Math.max(left.maxDistance, right.maxDistance), left.height + right.height + 1);
         return new Info(maxDistance, height);
     }
-}
 
-class Info {
-    public int maxDistance;
+    class Info {
+        public int maxDistance;
 
-    public int height;
+        public int height;
 
-    public Info(int maxDistance, int height) {
-        this.maxDistance = maxDistance;
-        this.height = height;
+        public Info(int maxDistance, int height) {
+            this.maxDistance = maxDistance;
+            this.height = height;
+        }
     }
 }
+
