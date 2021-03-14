@@ -1,6 +1,4 @@
-package study.bd;
-
-import study.binarytree.TreeNode;
+package study.binarytree;
 
 /**
  * 二叉树的后继节点

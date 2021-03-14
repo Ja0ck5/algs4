@@ -1,9 +1,15 @@
-package study.bd;
-
-import study.binarytree.TreeNode;
+package study.binarytree;
 
 /**
  * 最大二叉搜索子树 size
+ * <p>
+ * method:
+ * 1. 假设root,可以向 root.left & root.right 获取任何信息
+ * 2. 列出 root 的可能性(与root 有关/ 与root无关)
+ * 3. 列出可能性后，确定 left/right 都需要什么信息
+ * 4. left right 求全集S(非必须)
+ * 5. 递归函数都返回 S , 每棵子树如此
+ * 6. 整合代码
  */
 public class MaxBinarySearchTree {
 

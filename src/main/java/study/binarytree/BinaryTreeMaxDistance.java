@@ -1,4 +1,4 @@
-package study.bd;
+package study.binarytree;
 
 import study.binarytree.TreeNode;
 
