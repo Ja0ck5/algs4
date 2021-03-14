@@ -61,4 +61,45 @@ public class OrderTraversal {
         return results;
     }
 
+
+    public List<Integer> inorderTraversal(TreeNode root) {
+        List<Integer> results = new ArrayList<>();
+        if (root != null) {
+            Stack<TreeNode> stack = new Stack<>();
+            while (!stack.isEmpty() || root != null) {
+                if (root != null) {
+                    stack.push(root);
+                    root = root.left;
+                } else {
+                    root = stack.pop();
+                    results.add(root.val);
+                    root = root.right;
+                }
+            }
+        }
+        return results;
+    }
+
+    public List<Integer> postOrderTraversal(TreeNode root) {
+        List<Integer> results = new ArrayList<>();
+        if (root != null) {
+            Stack<TreeNode> stack = new Stack<>();
+            stack.push(root);
+            TreeNode c = null;
+            while (!stack.isEmpty()) {
+                c = stack.peek();
+                if (c.left != null && root != c.left && root != c.right) {
+                    stack.push(c.left);
+                } else if (c.right != null && root != c.right) {
+                    stack.push(c.right);
+                } else {
+                    results.add(stack.pop().val);
+                    root = c;
+                }
+            }
+        }
+        return results;
+    }
+
+
 }
