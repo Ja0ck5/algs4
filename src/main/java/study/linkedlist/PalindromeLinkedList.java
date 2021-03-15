@@ -39,4 +39,47 @@ public class PalindromeLinkedList {
         return true;
     }
 
+
+    public boolean isPalindrome2(ListNode head) {
+        if (head == null || head.next == null) {
+            return true;
+        }
+        ListNode firstHalfEnd = firstHalfEndList(head);
+        ListNode secondReverseList = reverseList(firstHalfEnd.next);
+
+        ListNode p1 = head;
+        ListNode p2 = secondReverseList;
+
+        while(p2 != null){
+            if(p1.val != p2.val){
+                return false;
+            }
+            p1 = p1.next;
+            p2 = p2.next;
+        }
+        firstHalfEnd.next = reverseList(secondReverseList);
+        return true;
+    }
+
+    public ListNode reverseList(ListNode head){
+        ListNode prev = null;
+        ListNode p = head;
+        while(p != null){
+            ListNode tmp = p.next;
+            p.next = prev;
+            prev = p;
+            p = tmp;
+        }
+        return prev;
+    }
+
+    public ListNode firstHalfEndList(ListNode head){
+        ListNode slow = head;
+        ListNode fast = head;
+        while(fast.next != null && fast.next.next != null){
+            fast = fast.next.next;
+            slow = slow.next;
+        }
+        return slow;
+    }
 }
