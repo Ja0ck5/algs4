@@ -103,6 +103,15 @@ public class MaximumWidthOfBinaryTree {
         return ans;
     }
 
+    /**
+     * 按照深度优先的顺序，我们记录每个节点的 position 。对于每一个深度，第一个到达的位置会被记录在 left[depth] 中。
+     *
+     * 然后对于每一个节点，它对应这一层的可能宽度是 pos - left[depth] + 1 。我们将每一层这些可能的宽度去一个最大值就是答案。
+     *
+     * @param root
+     * @param depth
+     * @param pos
+     */
     public void dfs(TreeNode root, int depth, int pos) {
         if (root == null) return;
         left.putIfAbsent(depth, pos);
