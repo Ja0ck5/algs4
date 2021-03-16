@@ -26,5 +26,40 @@ public class CloneRandomListNode {
         return map.get(head);
     }
 
-    // TODO 1->1'->2->2'->3->3'
+    /**
+     * 1. 1->1'->2->2'->3->3' 2. copy 3. split
+     */
+    public RandomListNode copyRandomList(RandomListNode head) {
+        RandomListNode p = head;
+
+        while (p != null) {
+            RandomListNode tmp = p.next;
+            p.next = new RandomListNode(p.label);
+            p.next.next = tmp;
+            p = tmp;
+        }
+
+        p = head;
+        RandomListNode copy;
+        while (p != null) {
+            RandomListNode tmp = p.next.next;
+            copy = p.next;
+            copy.random = p.random != null ? p.random.next : null;
+            p = tmp;
+        }
+
+        RandomListNode res = head.next;
+        p = head;
+        while (p != null) {
+            RandomListNode tmp = p.next.next;
+            copy = p.next;
+            p.next = tmp;
+            copy.next = tmp != null ? tmp.next : null;
+            p = tmp;
+        }
+
+        return res;
+    }
+
+
 }
