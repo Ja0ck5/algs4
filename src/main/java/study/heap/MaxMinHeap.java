@@ -12,6 +12,9 @@ package study.heap;
  * parent = (i)/2 ====>[ i >> 1]
  * left = 2 * i ====>[ i << 1]
  * right = 2 * i + 1 ====>[ i << 1 | 1 ]
+ *
+ * 额外空间 O(1)
+ * 时间复杂度 O(N*logn)
  */
 public class MaxMinHeap {
 
