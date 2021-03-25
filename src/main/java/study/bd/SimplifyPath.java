@@ -1,5 +1,8 @@
 package study.bd;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 /**
  * 71. 简化路径
  * 给你一个字符串 path ，表示指向某一文件或目录的 Unix 风格 绝对路径 （以 '/' 开头），请你将其转化为更加简洁的规范路径。
@@ -45,4 +48,33 @@ package study.bd;
  * 通过次数73,381提交次数175,916
  */
 public class SimplifyPath {
+
+    public String simplifyPath(String path) {
+        String[] sp = path.split("/");
+        if(sp.length == 0){
+            return "/";
+        }
+        Deque<String> queue = new ArrayDeque<>();
+        for (int i = 0; i < sp.length; i++) {
+            String layer = sp[i];
+            if(".".equals(layer) || "".equals(layer)){
+                continue;
+            }else if("..".equals(layer)){
+                if(!queue.isEmpty()){
+                    queue.removeLast();
+                }
+            }else{
+                queue.addLast(layer);
+            }
+        }
+        if(queue.isEmpty()){
+            return "/";
+        }
+        StringBuilder sb = new StringBuilder();
+        while(!queue.isEmpty()){
+            sb.append("/").append(queue.removeFirst());
+        }
+        return sb.toString();
+    }
+
 }
