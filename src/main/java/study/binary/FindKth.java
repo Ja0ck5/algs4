@@ -49,35 +49,38 @@ public class FindKth {
     // --------------------------------------------------------------------------------- //
 
     public int findKthLargestHeapVersion(int[] nums, int k) {
-        int heapSize = nums.length;
-        buildMaxHeap(nums, heapSize);
-        for (int i = nums.length - 1; i >= nums.length - k + 1; --i) {
-            swap(nums, 0, i);
-            maxHeapify(nums, 0, --heapSize);
+        int n = nums.length;
+        for (int i = n/2; i >= 1; i--) {
+            sink(nums, i, n);
+        }
+        while (n > k) {
+            exch(nums, 1, n--);
+            sink(nums, 1, n);
         }
         return nums[0];
     }
 
-    public void buildMaxHeap(int[] a, int heapSize) {
-        for (int i = heapSize / 2; i >= 0; --i) {
-            maxHeapify(a, i, heapSize);
+    private void exch(int[] nums, int i, int j) {
+        int swap = nums[i - 1];
+        nums[i - 1] = nums[j - 1];
+        nums[j - 1] = swap;
+    }
+
+    private void sink(int[] nums, int k, int n) {
+        while (2 * k <= n) {
+            int j = 2 * k;
+            if (j < n && less(nums, j + 1, j)) {
+                j++;
+            }
+            if (less(nums, k, j)) {
+                break;
+            }
+            exch(nums, k, j);
+            k = j;
         }
     }
 
-    public void maxHeapify(int[] a, int i, int heapSize) {
-        int l = i * 2 + 1, r = i * 2 + 2, largest = i;
-        if (l < heapSize && a[l] > a[largest]) {
-            largest = l;
-        }
-        if (r < heapSize && a[r] > a[largest]) {
-            largest = r;
-        }
-        if (largest != i) {
-            swap(a, i, largest);
-            maxHeapify(a, largest, heapSize);
-        }
+    private boolean less(int[] nums, int i, int j) {
+        return nums[i - 1] < nums[j - 1];
     }
-
-
-
 }
