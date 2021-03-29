@@ -20,6 +20,18 @@ public class HeapSort {
         }
     }
 
+    public void maxSort(int[] pq){
+        int n = pq.length;
+        for (int k = n / 2; k >= 1; k--) {
+            sink4Max(pq, k, n);
+        }
+        while (n > 1) {
+            exch(pq, 1, n--);
+            sink4Max(pq, 1, n);
+        }
+    }
+
+
     private void exch(int[] pq, int i, int j) {
         int swap = pq[i - 1];
         pq[i - 1] = pq[j - 1];
@@ -33,7 +45,6 @@ public class HeapSort {
             if (j < n && less(pq, j, j + 1)) {
                 j++;
             }
-            // 当前 k 比 j 大
             if (!less(pq, k, j)) {
                 break;
             }
@@ -43,6 +54,23 @@ public class HeapSort {
         }
     }
 
+    private void sink4Max(int[] pq, int k, int n) {
+        while (2 * k <= n) {
+            int j = 2 * k;
+            // left right 比较, right 更大，则 j++(right)
+            if (j < n && less(pq, j + 1, j)) {
+                j++;
+            }
+            if (less(pq, k, j)) {
+                break;
+            }
+            // 交换并下沉
+            exch(pq, k, j);
+            k = j;
+        }
+    }
+
+
     private boolean less(int[] pq, int i, int j) {
         return pq[i - 1] < pq[j - 1];
     }
@@ -50,7 +78,9 @@ public class HeapSort {
     public static void main(String[] args) {
         int[] a = {10, 5, 7, 9, 3, 1, 4, 4};
         HeapSort heapSort = new HeapSort();
-        heapSort.sort(a);
+//        heapSort.sort(a);
+//        System.out.println(Arrays.toString(a));
+        heapSort.maxSort(a);
         System.out.println(Arrays.toString(a));
     }
 
