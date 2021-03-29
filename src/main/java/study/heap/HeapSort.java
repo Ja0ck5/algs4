@@ -1,7 +1,5 @@
 package study.heap;
 
-import java.util.Arrays;
-
 /**
  * 最大最小堆 based = 0; parent = (i - 1)/2 left = 2 * i + 1 right = 2 * i + 2
  * <p>
@@ -73,15 +71,6 @@ public class HeapSort {
 
     private boolean less(int[] pq, int i, int j) {
         return pq[i - 1] < pq[j - 1];
-    }
-
-    public static void main(String[] args) {
-        int[] a = {10, 5, 7, 9, 3, 1, 4, 4};
-        HeapSort heapSort = new HeapSort();
-//        heapSort.sort(a);
-//        System.out.println(Arrays.toString(a));
-        heapSort.maxSort(a);
-        System.out.println(Arrays.toString(a));
     }
 
 }
