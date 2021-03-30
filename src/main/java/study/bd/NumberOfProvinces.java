@@ -35,6 +35,7 @@ package study.bd;
  * isConnected[i][j] == isConnected[j][i]
  * 通过次数123,941提交次数201,697
  *
+ * 典型并查集
  * @author liyanjie
  * @createTime 2021-03-29 17:33
  */
