@@ -1,0 +1,11 @@
+###  一张表最多能存多少数据
+
+```text
+An InnoDB tablespace also has a limit on table size of 64 terabytes. How many rows fits into this depends on the size of each row.
+
+The 64TB limit assumes the default page size of 16KB. You can increase the page size, and therefore increase the tablespace up to 256TB. But I think you'd find other performance factors make this inadvisable long before you grow a table to that size.
+```
+
+根据 page 页大小而定，默认 16KB 则 64T, 如果调整页大小最大能到 265T
+
+
