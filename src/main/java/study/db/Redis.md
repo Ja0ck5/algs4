@@ -291,3 +291,6 @@ hash 最差的情况应该是 5n(准备扩容时：有 fork 操作时，服务�
 
 　　添加操作的键值对会一律保存到ht[1]中，这一措施保证ht[0]包含的键值对只会减少不会增加。
 
+### BloomFilter 布隆过滤器
+
+![Redis-hash-zset-m.PNG](./BloomFilter-principle.PNG)
