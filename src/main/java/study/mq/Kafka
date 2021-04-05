@@ -339,3 +339,16 @@ NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connect
 
 默认开启。适用于需要发送大量消息的场景，这种算法可以减少传输次数，增加性能。
 它会把一些包收集起来，组成一个大包发送出去。所以一定不能设置为 false, 否则，消息包小，不组成大包发出去是不合理的。
+
+
+## Kafka 处理粘包拆包问题
+
+![](./tcp-sperate-union.PNG)
+
+```text
+Kafka 底层就是通过**长度编码方式**解决TCP 粘包 拆包问题的。
+```
+
+## Kafka 服务端模型
+
+![](./KafkaServer-network.PNG)
