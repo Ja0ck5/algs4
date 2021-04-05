@@ -365,8 +365,17 @@ KafkaServer 处理 RequestQueue
 
 ![](./KafkaServer-network-05.PNG)
 
+## kafka 整体架构
+![](./Kafka-整体架构.PNG)
+
+## kafka broker
+![](./Kafka-broker.PNG)
+
+## 内存映射与稀疏索引
+MappedByteBuffer
+
+![](./内存映射与稀疏索引.PNG)
+
+
 ## Kafka 流程
 ![](./Kafka-structure.png)
-
-
-
