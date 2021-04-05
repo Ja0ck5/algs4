@@ -352,3 +352,6 @@ Kafka 底层就是通过**长度编码方式**解决TCP 粘包 拆包问题的�
 ## Kafka 服务端模型
 
 ![](./KafkaServer-network.PNG)
+
+![](./KafkaServer-network-02.PNG)
+
