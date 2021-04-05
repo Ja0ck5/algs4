@@ -35,4 +35,164 @@
 
 ![Kafka-Send](./Kafka-Send.png)
 
+## KafkaProducer 初始化
+```java
+
+    // visible for testing
+    @SuppressWarnings("unchecked")
+    KafkaProducer(ProducerConfig config,
+                  Serializer<K> keySerializer,
+                  Serializer<V> valueSerializer,
+                  ProducerMetadata metadata,
+                  KafkaClient kafkaClient,
+                  ProducerInterceptors<K, V> interceptors,
+                  Time time) {
+        try {
+            this.producerConfig = config;
+            this.time = time;
+    
+            // 事务id
+            String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            // 配置 Client Id 一般不配置
+            this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
+
+            LogContext logContext;
+            if (transactionalId == null)
+                logContext = new LogContext(String.format("[Producer clientId=%s] ", clientId));
+            else
+                logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s] ", clientId, transactionalId));
+            log = logContext.logger(KafkaProducer.class);
+            log.trace("Starting the Kafka producer");
+            
+            // Metrics 监控信息
+            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
+            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                    .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+                    .tags(metricTags);
+            List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                    MetricsReporter.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+            JmxReporter jmxReporter = new JmxReporter();
+            jmxReporter.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)));
+            reporters.add(jmxReporter);
+            MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
+                    config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+            this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            // 设置分区器，默认使用 DefaultPatitionner
+            this.partitioner = config.getConfiguredInstance(
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    Partitioner.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+
+            // 重试间隔时间
+            long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            
+            // 设置序列化器，支持自定义
+            if (keySerializer == null) {
+                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                                                                                         Serializer.class);
+                this.keySerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), true);
+            } else {
+                config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+                this.keySerializer = keySerializer;
+            }
+            if (valueSerializer == null) {
+                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                                                                                           Serializer.class);
+                this.valueSerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), false);
+            } else {
+                config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+                this.valueSerializer = valueSerializer;
+            }
+            
+            // 拦截器链
+            List<ProducerInterceptor<K, V>> interceptorList = (List) config.getConfiguredInstances(
+                    ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ProducerInterceptor.class,
+                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+            if (interceptors != null)
+                this.interceptors = interceptors;
+            else
+                this.interceptors = new ProducerInterceptors<>(interceptorList);
+            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keySerializer,
+                    valueSerializer, interceptorList, reporters);
+
+            // 最大请求的消息大小默认 1M 
+            this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
+
+            // 缓存大小默认32M 其实就是 RecordAccumulator 的缓冲区大小
+            this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
+
+            // 设置压缩格式
+            this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+
+            // 当 Buffer 满了，或者metadata 获取不到，或者序列化没有完成，或者分区函数没有计算完成等等 最大的阻塞时间 60s
+            this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            // 发送消息上报成功或者失败的的最大时间
+            int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
+
+            this.apiVersions = new ApiVersions();
+            // 配置事务管理器
+            this.transactionManager = configureTransactionState(config, logContext);
+            
+            // 创建核心组件，RecordAccumulator，缓存消息
+            this.accumulator = new RecordAccumulator(logContext,
+                    config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), // ProducerBatch 默认 16384bytes= 16KB
+                    this.compressionType,
+                    lingerMs(config),
+                    retryBackoffMs,
+                    deliveryTimeoutMs,
+                    metrics,
+                    PRODUCER_METRIC_GROUP_NAME,
+                    time,
+                    apiVersions,
+                    transactionManager,
+                    new BufferPool(this.totalMemorySize, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG), metrics, time, PRODUCER_METRIC_GROUP_NAME));
+
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.getString(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            
+            // 判断kafka 元数据信息是否存在
+            if (metadata != null) {
+                // Kafka 集群节点、topic、topic 分区、ISR 列表
+                this.metadata = metadata;
+            } else {
+                this.metadata = new ProducerMetadata(retryBackoffMs,
+                        config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                        config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
+                        logContext,
+                        clusterResourceListeners,
+                        Time.SYSTEM);
+                this.metadata.bootstrap(addresses);
+            }
+
+            this.errors = this.metrics.sensor("errors");
+            // 初始化 Sender 线程
+            this.sender = newSender(logContext, kafkaClient, this.metadata);
+            String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
+            this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
+            this.ioThread.start();
+
+            config.logUnused();
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
+            log.debug("Kafka producer started");
+        } catch (Throwable t) {
+            // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
+            close(Duration.ofMillis(0), true);
+            // now propagate the exception
+            throw new KafkaException("Failed to construct kafka producer", t);
+        }
+    }
+
+```
+
+### NetWorkClient
+
+NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connection: 5 默认配置。即可能同时发送5个消息，但是其中之一如果失败重试，则顺序就会乱。
+设置为 1 可以避免一个分区内的乱序。
+
+![NetWorkClient](./NetWorkClient.PNG)
+
 
