@@ -355,3 +355,9 @@ Kafka 底层就是通过**长度编码方式**解决TCP 粘包 拆包问题的�
 
 ![](./KafkaServer-network-02.PNG)
 
+Kafka Processor 如何处理 stagedReceives 中的请求？
+
+![](./KafkaServer-network-03.PNG)
+
+
+
