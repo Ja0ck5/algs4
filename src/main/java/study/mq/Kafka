@@ -33,7 +33,14 @@
 
 ## Kafka 发送流程
 
-![Kafka-Send](./Kafka-Send.png)
+![Kafka-Send](./Kafka-send-01.png)
+
+![Kafka-Send](./Kafaka-send-02.PNG)
+
+## Kafka RecordAccumulator
+
+![accumulator](./Kafka-record-accumulator.PNG)
+
 
 ## KafkaProducer 初始化
 ```java
@@ -199,4 +206,126 @@ NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connect
 ### Sender retry & ack
 
 ![Sender-retry-ack](./Sender-retry-ack.PNG)
+
+
+## Producer doSend
+
+```java
+
+    /**
+     * Implementation of asynchronously send a record to a topic.
+     */
+    private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
+        TopicPartition tp = null;
+        try {
+            throwIfProducerClosed();
+            // first make sure the metadata for the topic is available
+            long nowMs = time.milliseconds();
+            ClusterAndWaitTime clusterAndWaitTime;
+            try {
+                // 等待拉去元数据
+                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
+            } catch (KafkaException e) {
+                if (metadata.isClosed())
+                    throw new KafkaException("Producer closed while send in progress", e);
+                throw e;
+            }
+            nowMs += clusterAndWaitTime.waitedOnMetadataMs;
+            long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            Cluster cluster = clusterAndWaitTime.cluster;
+        
+            // key value 序列化
+            byte[] serializedKey;
+            try {
+                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+            } catch (ClassCastException cce) {
+                throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
+                        " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
+                        " specified in key.serializer", cce);
+            }
+            byte[] serializedValue;
+            try {
+                serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+            } catch (ClassCastException cce) {
+                throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
+                        " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
+                        " specified in value.serializer", cce);
+            }
+            
+            // 根据元数据信息，计算出消息应该发送到哪个分区
+            int partition = partition(record, serializedKey, serializedValue, cluster);
+            tp = new TopicPartition(record.topic(), partition);
+
+            setReadOnly(record.headers());
+            Header[] headers = record.headers().toArray();
+
+            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
+                    compressionType, serializedKey, serializedValue, headers);
+            //  判断消息是否超过 消息大小的最大值 默认 1M
+            ensureValidRecordSize(serializedSize);
+            long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
+            if (log.isTraceEnabled()) {
+                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
+            }
+            // producer callback will make sure to call both 'callback' and interceptor callback
+            // 绑定 callback 回调函数
+            Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+            if (transactionManager != null && transactionManager.isTransactional()) {
+                transactionManager.failIfNotReadyForSend();
+            }
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
+                    serializedValue, headers, interceptCallback, remainingWaitMs, true, nowMs);
+
+            if (result.abortForNewBatch) {
+                int prevPartition = partition;
+                partitioner.onNewBatch(record.topic(), cluster, prevPartition);
+                partition = partition(record, serializedKey, serializedValue, cluster);
+                tp = new TopicPartition(record.topic(), partition);
+                if (log.isTraceEnabled()) {
+                    log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
+                }
+                // producer callback will make sure to call both 'callback' and interceptor callback
+                interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
+
+                result = accumulator.append(tp, timestamp, serializedKey,
+                    serializedValue, headers, interceptCallback, remainingWaitMs, false, nowMs);
+            }
+        
+            // 判断事务
+            if (transactionManager != null && transactionManager.isTransactional())
+                transactionManager.maybeAddPartitionToTransaction(tp);
+            // 如果批次满了，或者是创建了新的批次
+            if (result.batchIsFull || result.newBatchCreated) {
+                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
+                // 唤醒 sender, 它是真正发送数据的线程
+                this.sender.wakeup();
+            }
+            return result.future;
+            // handling exceptions and record the errors;
+            // for API exceptions return them in the future,
+            // for other exceptions throw directly
+        } catch (ApiException e) {
+            log.debug("Exception occurred during message send:", e);
+            if (callback != null)
+                callback.onCompletion(null, e);
+            this.errors.record();
+            this.interceptors.onSendError(record, tp, e);
+            return new FutureFailure(e);
+        } catch (InterruptedException e) {
+            this.errors.record();
+            this.interceptors.onSendError(record, tp, e);
+            throw new InterruptException(e);
+        } catch (KafkaException e) {
+            this.errors.record();
+            this.interceptors.onSendError(record, tp, e);
+            throw e;
+        } catch (Exception e) {
+            // we notify interceptor about all exceptions, since onSend is called before anything else in this method
+            this.interceptors.onSendError(record, tp, e);
+            throw e;
+        }
+    }
+
+```
 
