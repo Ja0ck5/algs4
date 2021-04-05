@@ -359,5 +359,14 @@ Kafka Processor 如何处理 stagedReceives 中的请求？
 
 ![](./KafkaServer-network-03.PNG)
 
+KafkaServer 处理 RequestQueue
+
+![](./KafkaServer-network-04.PNG)
+
+![](./KafkaServer-network-05.PNG)
+
+## Kafka 流程
+![](./Kafka-structure.png)
+
 
 
