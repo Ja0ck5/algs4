@@ -114,6 +114,12 @@ MySQL 采用了如下的过程实现内部 XA 的两阶段提交：
 
 **延迟写 redo 到 group commit 阶段**
 
+基于
+```text
+1. 同时处于 Prepare 状态的事务，在从库执行是可以并行执行的
+2. 处于 Prepare 与 Commit 状态之间的事务，在从库执行也是可以并行执行的。
+```
+
 MySQL 5.6 的组提交逻辑中，每个事务各自做 prepare 并写 redo log，只有到了 commit 阶段才进入组提交，因此每个事务的 redolog sync 操作成为性能瓶颈。
 
 在 5.7 版本中，修改了组提交的 flush 阶段，在 prepare 阶段不再让线程各自执行 flush redolog 操作，而是推迟到组提交的 flush 阶段，flush stage 修改成如下逻辑：
