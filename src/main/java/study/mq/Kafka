@@ -204,6 +204,10 @@ NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connect
 
 ![NetWorkClient](./NetworkClient-02.PNG)
 
+![NetWorkClient](./NetworkClient-03.PNG)
+
+没有建立连接，会移除可用主机，也就获取不到 Batches，即不会发送消息到对应主机上。
+
 
 ### Sender retry & ack
 
@@ -331,3 +335,7 @@ NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connect
 
 ```
 
+## Nagle 算法
+
+默认开启。适用于需要发送大量消息的场景，这种算法可以减少传输次数，增加性能。
+它会把一些包收集起来，组成一个大包发送出去。所以一定不能设置为 false, 否则，消息包小，不组成大包发出去是不合理的。
