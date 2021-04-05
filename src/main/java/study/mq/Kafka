@@ -196,3 +196,7 @@ NetWorkClient 可能导致的乱序的情况，max.in.flight.request.per.connect
 ![NetWorkClient](./NetWorkClient.PNG)
 
 
+### Sender retry & ack
+
+![Sender-retry-ack](./Sender-retry-ack.PNG)
+
