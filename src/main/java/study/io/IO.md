@@ -192,6 +192,8 @@ epoll跟select都能提供多路I/O复用的解决方案。在现在的Linux内�
 
 ### select：
 
+![](./Select-call.PNG)
+
 select本质上是通过设置或者检查存放fd标志位的数据结构来进行下一步处理。这样所带来的缺点是：
 
 ```text
@@ -221,6 +223,19 @@ poll本质上和select没有区别，它将用户传入的数组拷贝到内核�
 
 ### epoll:
 
+![](./epoll-function-params.PNG)
+
+epoll_create
+
+![](./epoll_create.PNG)
+
+epoll_ctl
+![](./epoll_ctl.PNG)
+
+epoll_wait
+![](./epoll_wait.PNG)
+
+![](./epoll_rdlist.PNG)
 
 epoll有EPOLLLT和EPOLLET两种触发模式，LT是默认的模式，ET是“高速”模式。LT模式下，只要这个fd还有数据可读，每次 epoll_wait都会返回它的事件，提醒用户程序去操作，而在ET（边缘触发）模式中，它只会提示一次，直到下次再有数据流入之前都不会再提示了，无 论fd中是否还有数据可读。所以在ET模式下，read一个fd的时候一定要把它的buffer读光，也就是说一直读到read的返回值小于请求值，或者 遇到EAGAIN错误。还有一个特点是，epoll使用“事件”的就绪通知方式，通过epoll_ctl注册fd，一旦该fd就绪，内核就会采用类似callback的回调机制来激活该fd，epoll_wait便可以收到通知。
 
