@@ -372,10 +372,38 @@ KafkaServer 处理 RequestQueue
 ![](./Kafka-broker.PNG)
 
 ## 内存映射与稀疏索引
-MappedByteBuffer
+MappedByteBuffer, 当已写入的字节数超过了 4KB (4096bytes), 会调用索引对象的 append 方法增加索引。即稀疏索引。
 
 ![](./内存映射与稀疏索引.PNG)
 
+写消息到磁盘文件中，底层采用了 FileChannel , 出于性能考虑，操作系统会将数据缓存到内存中(OS Cache)
+所以无法保证写入到 FileChannel 里的数据一定会即时写到磁盘中，要保证这一点，需要调用 force 方法。
+
+## Leader Partition & Follower 同步
+
+### kafka不是完全同步，也不是完全异步，是一种ISR机制：
+
+```text
+1. leader会维护一个与其基本保持同步的Replica列表，该列表称为ISR(in-sync Replica)，每个Partition都会有一个ISR，而且是由leader动态维护
+
+2. 如果一个follower比一个leader落后太多，或者超过一定时间未发起数据复制请求，则leader将其重ISR中移除
+
+3. 当ISR中所有Replica都向Leader发送ACK时，leader才commit，这时候producer才能认为一个请求中的消息都commit了。
+```
+
+LEO: Log end offset
+
+HW: High Watermark, 
+
+Learder HW = MIN(ISR_ALL(Replica(1)LEO,Replica(2)LEO, .... Replica(N)LEO))
+
+
+![](./内存映射与稀疏索引.PNG)
+
+## Kafka Consumer init
+
+![](./Kafka-consumer-init.PNG)
+
 
 ## Kafka 流程
-![](./Kafka-structure.png)
+![](./Kafka-structure-01.png)
