@@ -442,3 +442,178 @@ Gossip算法又被称为反熵（Anti-Entropy），熵是物理学上的一个�
 每个节点可能知道所有其他节点，也可能仅知道几个邻居节点，只要这些节可以通过网络连通，最终他们的状态都是一致的
 
 ```
+
+### Redis Gossip 源码
+
+#### 调度Gossip通信
+
+```c++
+/* Run the Redis Cluster cron. */
+// 如果服务器运行在集群模式下，那么执行集群操作
+run_with_period(100) {
+    if (server.cluster_enabled)     clusterCron();
+}
+```
+
+#### 节点加入集群
+
+```c++
+// 为未创建连接的节点创建连接
+if (node->link == NULL) {
+    // .....
+    /* Queue a PING in the new connection ASAP: this is crucial
+     * to avoid false positives in failure detection.
+     *
+     * If the node is flagged as MEET, we send a MEET message instead
+     * of a PING one, to force the receiver to add us in its node
+     * table. */
+    // 向新连接的节点发送 PING 命令，防止节点被识进入下线
+    // 如果节点被标记为 MEET ，那么发送 MEET 命令，否则发送 PING 命令
+    old_ping_sent = node->ping_sent;
+    clusterSendPing(link, node->flags & REDIS_NODE_MEET ?
+            CLUSTERMSG_TYPE_MEET : CLUSTERMSG_TYPE_PING);
+    // 这不是第一次发送 PING 信息，所以可以还原这个时间
+    // 等 clusterSendPing() 函数来更新它
+    if (old_ping_sent) {
+        /* If there was an active ping before the link was
+         * disconnected, we want to restore the ping time, otherwise
+         * replaced by the clusterSendPing() call. */
+        node->ping_sent = old_ping_sent;
+    }
+    /* We can clear the flag after the first packet is sent.
+     *
+     * 在发送 MEET 信息之后，清除节点的 MEET 标识。
+     *
+     * If we'll never receive a PONG, we'll never send new packets
+     * to this node. Instead after the PONG is received and we
+     * are no longer in meet/handshake status, we want to send
+     * normal PING packets. 
+     *
+     * 如果当前节点（发送者）没能收到 MEET 信息的回复，
+     * 那么它将不再向目标节点发送命令。
+     *
+     * 如果接收到回复的话，那么节点将不再处于 HANDSHAKE 状态，
+     * 并继续向目标节点发送普通 PING 命令。
+     */
+    node->flags &= ~REDIS_NODE_MEET;
+    redisLog(REDIS_DEBUG,"Connecting with Node %.40s at %s:%d",
+            node->name, node->ip, node->port+REDIS_CLUSTER_PORT_INCR);
+}
+```
+
+
+#### 随机周期性发送PING消息
+
+```c++
+
+/* Ping some random node 1 time every 10 iterations, so that we usually ping
+ * one random node every second. */
+// clusterCron() 每执行 10 次（至少间隔一秒钟），就向一个随机节点发送 gossip 信息
+if (!(iteration % 10)) {
+    int j;
+    /* Check a few random nodes and ping the one with the oldest
+     * pong_received time. */
+    // 随机 5 个节点，选出其中一个
+    for (j = 0; j < 5; j++) {
+        // 随机在集群中挑选节点
+        de = dictGetRandomKey(server.cluster->nodes);
+        clusterNode *this = dictGetVal(de);
+        /* Don't ping nodes disconnected or with a ping currently active. */
+        // 不要 PING 连接断开的节点，也不要 PING 最近已经 PING 过的节点
+        if (this->link == NULL || this->ping_sent != 0) continue;
+        if (this->flags & (REDIS_NODE_MYSELF|REDIS_NODE_HANDSHAKE))
+            continue;
+        // 选出 5 个随机节点中最近一次接收 PONG 回复距离现在最旧的节点
+        if (min_pong_node == NULL || min_pong > this->pong_received) {
+            min_pong_node = this;
+            min_pong = this->pong_received;
+        }
+    }
+    // 向最久没有收到 PONG 回复的节点发送 PING 命令
+    if (min_pong_node) {
+        redisLog(REDIS_DEBUG,"Pinging node %.40s", min_pong_node->name);
+        clusterSendPing(min_pong_node->link, CLUSTERMSG_TYPE_PING);
+    }
+}
+
+```
+
+#### 防止节点假超时及状态过期
+
+```c++
+
+/* If we are waiting for the PONG more than half the cluster
+ * timeout, reconnect the link: maybe there is a connection
+ * issue even if the node is alive. */
+// 如果等到 PONG 到达的时间超过了 node timeout 一半的连接
+// 因为尽管节点依然正常，但连接可能已经出问题了
+if (node->link && /* is connected */
+    now - node->link->ctime >
+    server.cluster_node_timeout && /* was not already reconnected */
+    node->ping_sent && /* we already sent a ping */
+    node->pong_received < node->ping_sent && /* still waiting pong */
+    /* and we are waiting for the pong more than timeout/2 */
+    now - node->ping_sent > server.cluster_node_timeout/2)
+{
+    /* Disconnect the link, it will be reconnected automatically. */
+    // 释放连接，下次 clusterCron() 会自动重连
+    freeClusterLink(node->link);
+}
+/* If we have currently no active ping in this instance, and the
+ * received PONG is older than half the cluster timeout, send
+ * a new ping now, to ensure all the nodes are pinged without
+ * a too big delay. */
+// 如果目前没有在 PING 节点
+// 并且已经有 node timeout 一半的时间没有从节点那里收到 PONG 回复
+// 那么向节点发送一个 PING ，确保节点的信息不会太旧
+// （因为一部分节点可能一直没有被随机中）
+if (node->link &&
+    node->ping_sent == 0 &&
+    (now - node->pong_received) > server.cluster_node_timeout/2)
+{
+    clusterSendPing(node->link, CLUSTERMSG_TYPE_PING);
+    continue;
+}
+
+```
+
+#### 处理failover和标记疑似下线
+
+```c++
+
+/* If we are a master and one of the slaves requested a manual
+ * failover, ping it continuously. */
+// 如果这是一个主节点，并且有一个从服务器请求进行手动故障转移
+// 那么向从服务器发送 PING 。
+if (server.cluster->mf_end &&
+    nodeIsMaster(myself) &&
+    server.cluster->mf_slave == node &&
+    node->link)
+{
+    clusterSendPing(node->link, CLUSTERMSG_TYPE_PING);
+    continue;
+}
+/* Check only if we have an active ping for this instance. */
+// 以下代码只在节点发送了 PING 命令的情况下执行
+if (node->ping_sent == 0) continue;
+/* Compute the delay of the PONG. Note that if we already received
+ * the PONG, then node->ping_sent is zero, so can't reach this
+ * code at all. */
+// 计算等待 PONG 回复的时长
+delay = now - node->ping_sent;
+// 等待 PONG 回复的时长超过了限制值，将目标节点标记为 PFAIL （疑似下线）
+if (delay > server.cluster_node_timeout) {
+    /* Timeout reached. Set the node as possibly failing if it is
+     * not already in this state. */
+    if (!(node->flags & (REDIS_NODE_PFAIL|REDIS_NODE_FAIL))) {
+        redisLog(REDIS_DEBUG,"*** NODE %.40s possibly failing",
+            node->name);
+        // 打开疑似下线标记
+        node->flags |= REDIS_NODE_PFAIL;
+        update_state = 1;
+    }
+}
+
+```
+
+
