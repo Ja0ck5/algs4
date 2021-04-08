@@ -1,0 +1,65 @@
+
+## document 写入流程：
+
+1. 数据写入 buffer
+2. commit point
+3. buffer 中的数据写入新的 index segment
+4. 等待在 os cache 中的 index segment 被 fsync 强制刷到磁盘上
+5. 新的 index sgement 被打开，供 search 使用
+6. buffer 被清空
+
+## document 删除原理
+每次 commit point 时，会有一个 .del 文件，标记了哪些 segment 中的哪些 document 被标记为 deleted 了
+
+搜索的时候，会依次查询所有的 segment，从旧的到新的， 比如被修改过的 document，在旧的 segment 中，会标记为 deleted，在新的 segment 中会有其新的数据
+
+## NRT 实现
+前面流程的问题，每次都必须等待 fsync 将 segment 刷入磁盘， 才能将 segment 打开供 search 使用，这样的话，从一个 document 写入，到它可以被搜索，可能会超过1分钟！！！
+
+这就不是近实时的搜索了！！！主要瓶颈在于 fsync 实际发生磁盘IO写数据进磁盘，是很耗时的。
+
+写入流程别改进如下：
+
+1. 数据写入 buffer
+2. 每隔一定时间，buffer 中的数据被写入 segment 文件，但是先写入 os cache
+3. 只要 segment 写入 os cache，那就直接打开供 search 使用，不立即执行 commit
+
+
+数据写入 os cache，并被打开供搜索的过程，叫做 refresh，默认是每隔 1秒 refresh 一次。 也就是说，每隔一秒就会将 buffer 中的数据写入一个新的 index segment file，先写入 os cache 中。所以，es 是近实时的，数据写入到可以被搜索，默认是 1秒。
+
+
+## durability 可靠存储
+再次优化的写入流程(增加了 translog 文件)
+
+1. 数据写入 buffer 缓冲和 translog 日志文件
+
+2. 每隔一秒钟，buffer 中的数据被写入新的 segment file，并进入 os cache，此时 segment 被打开并供 search 使用
+
+3. buffer 被清空
+
+4. 重复 1~3，新的 segment 不断添加，buffer 不断被清空，而 translog 中的数据不断累加
+
+5. 当 translog 长度达到一定程度的时候，commit 操作发生
+
+```text
+
+  5.1 buffer 中的所有数据写入一个新的 segment，并写入 os cache，打开供使用
+  5.2 buffer 被清空
+  5.3 一个 commit ponit 被写入磁盘，标明了所有的 index segment
+  5.4 filesystem cache 中的所有 index segment file 缓存数据，被 fsync 强行刷到磁盘上
+```
+
+## 海量磁盘文件合并
+每秒一个 segment file，文件过多，而且每次 search 都要搜索所有的 segment，很耗时
+
+默认会在后台执行 segment merge 操作，在 merge 的时候，被标记为 deleted 的 document 也会被彻底物理删除
+
+每次 merge 操作的执行流程
+```text
+
+选择一些有相似大小的 segment，merge 成一个大的 segment
+将新的 segment flush 到磁盘上去
+写一个新的 commit point，包括了新的 segment，并且排除旧的那些 segment
+将新的 segment 打开供搜索
+将旧的 segment 删除
+```
