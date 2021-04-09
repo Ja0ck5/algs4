@@ -192,5 +192,41 @@ Seconds_Behind_Master：     从属服务器SQL线程和从属服务器I/O线程
 2. 同一个事务不能拆开，需要分发到同个 Worker
 ```
 
-##### 5.7 并行复制策略
+#### Binlog 实时采集
+
+对Binlog的实时采集包含两个主要模块：
+
+```text
+1. CanalManager，主要负责采集任务的分配、监控报警、元数据管理以及和外部依赖系统的对接；
+
+2. 真正执行采集任务的Canal和CanalClient。
+```
+
+![](./Canal-Binlog.jpg)
+
+当用户提交某个DB的Binlog采集请求时，CanalManager首先会调用DBA平台的相关接口，获取这一DB所在MySQL实例的相关信息，目的是从中选出最适合Binlog采集的机器。然后把采集实例（Canal Instance）分发到合适的Canal服务器上，即CanalServer上。在选择具体的CanalServer时，CanalManager会考虑负载均衡、跨机房传输等因素，优先选择负载较低且同地域传输的机器。
+
+CanalServer收到采集请求后，会在ZooKeeper上对收集信息进行注册。注册的内容包括：
+
+1. 以Instance名称命名的永久节点。
+2. 在该永久节点下注册以自身ip:port命名的临时节点。
+
+这样做的目的有两个：
+
+1. 高可用：CanalManager对Instance进行分发时，会选择两台CanalServer，一台是Running节点，另一台作为Standby节点。Standby节点会对该Instance进行监听，当Running节点出现故障后，临时节点消失，然后Standby节点进行抢占。这样就达到了容灾的目的。
+
+2. 与CanalClient交互：CanalClient检测到自己负责的Instance所在的Running CanalServer后，便会进行连接，从而接收到CanalServer发来的Binlog数据。
+
+对Binlog的订阅以MySQL的DB为粒度，一个DB的Binlog对应了一个Kafka Topic。底层实现时，一个MySQL实例下所有订阅的DB，都由同一个Canal Instance进行处理。这是因为Binlog的产生是以MySQL实例为粒度的。CanalServer会抛弃掉未订阅的Binlog数据，然后CanalClient将接收到的Binlog按DB粒度分发到Kafka上。
+
+
+
+#### 离线还原MySQL数据
+
+完成Binlog采集后，下一步就是利用Binlog来还原业务数据。首先要解决的第一个问题是把Binlog从Kafka同步到Hive上。
+
+![](./Kafka-2-hive.jpg)
+
+
+
 
