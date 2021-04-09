@@ -158,7 +158,7 @@
 ### putVal 
 1. // 计算 tab 下标
    if ((p = tab[i = (n - 1) & hash]) == null)
-           
+   
 2. // 当前 bucket 空的，直接新增节点
 tab[i] = newNode(hash, key, value, null);
 
@@ -197,7 +197,7 @@ JDK8 使用 尾插法插入链表
                         break;
                     p = e;
                 }
-``` 
+```
 
 
 
@@ -1014,7 +1014,7 @@ StoreLoadBarrier
 ```
 
 ## Happens-Before的规则包括：
-   
+
 1. 程序顺序规则
    
 ```text
@@ -1026,8 +1026,8 @@ double r = 1.0; // B
 double area = pi * r * r; // C
 
 ```
-   
-   
+
+
 2. 锁定规则
 
 ```text
@@ -1042,8 +1042,8 @@ double area = pi * r * r; // C
 
 对一个volatile域的写，happens-before于任意后续对这个volatile域的读
 
-```   
-      
+```
+
 4. 线程启动规则(start()规则)
 
 ```text
@@ -1051,13 +1051,13 @@ double area = pi * r * r; // C
 这条是关于线程启动的。它是指主线程 A 启动子线程 B 后，子线程 B 能够看到主线程在启动子线程 B 前的操作。
 
 ```
-   
+
 5. 线程结束规则(join())
 
 ```text
 如果线程A执行操作ThreadB.join()并成功返回，那么线程B中的任意操作happens-before于线程A从ThreadB.join()操作成功返回。
 ```
-   
+
 6. 中断规则
 
 ```text
@@ -1069,7 +1069,7 @@ double area = pi * r * r; // C
 
 一个对象的构造函数执行结束Happens-Before它的finalize()方法的开始。
 
-```   
+```
 8. 传递性规则
    
 ```text
@@ -1110,7 +1110,7 @@ enum {  locked_value                 = 0, // 0 00 轻量级锁
 
 
    即对象指向它的元数据的指针，虚拟机通过这个指针来确定是哪个类的实例。并不是所有的虚拟机实现都必须在对象数据上保留类型指针(通过句柄池访问)。
-   
+
    简单引申一下对象的访问方式，我们创建对象的目的就是为了使用它。所以我们的Java程序在运行时会通过虚拟机栈中本地变量表的reference数据来操作堆上对象。但是reference只是JVM中规范的一个指向对象的引用，那这个引用如何去定位到具体的对象呢？因此，不同的虚拟机可以实现不同的定位方式。主要有两种：句柄池和直接指针。
 
 
@@ -1150,6 +1150,4 @@ CLH：Craig、Landin and Hagersten队列，是单向链表，AQS中的队列是C
 
 
 ![](./AQS-Node.jpg)
-
-![](./CLH-queue.gif)
 
