@@ -228,5 +228,22 @@ CanalServer收到采集请求后，会在ZooKeeper上对收集信息进行注册
 ![](./Kafka-2-hive.jpg)
 
 
+#### Logtail Binlog 同步
+
+Logtail内部实现了MySQL Slave节点的交互协议
+
+```text
+
+1. Logtail将自己伪装为MySQL Slave节点向MySQL master节点发送dump请求。
+
+2. MySQL master节点收到dump请求后，会将自身的Binlog实时发送给Logtail。
+
+3. Logtail对Binlog进行事件解析、过滤、数据解析等操作，并将解析好的数据上传到日志服务。
+```
+
+![](./Logtail-mysql.jpg)
+
+
+
 
 
