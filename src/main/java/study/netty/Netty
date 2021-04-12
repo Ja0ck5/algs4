@@ -37,3 +37,5 @@ Bootstrap 通常使用 connet() 方法连接到远程的主机和端口，作为
 ServerBootstrap通常使用 bind() 方法绑定本地的端口上，然后等待客户端的连接。
 Bootstrap 只需要配置一个线程组— EventLoopGroup ,而 ServerBootstrap需要配置两个线程组— EventLoopGroup ，一个用于接收连接，一个用于具体的处理。
 
+#### 流程
+![](./model.jpg)
