@@ -39,3 +39,9 @@ Bootstrap 只需要配置一个线程组— EventLoopGroup ,而 ServerBootstrap�
 
 #### 流程
 ![](./model.jpg)
+
+![](./Netty-model.PNG)
+
+#### Zero-Copy
+DirectByteBuf
+![](./Netty-zero-copy.PNG)

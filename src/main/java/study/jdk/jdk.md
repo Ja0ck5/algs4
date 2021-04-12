@@ -1151,8 +1151,8 @@ Object对象，总共占16字节
 
 线程解锁前，必须把共享变量的最新值刷新到主内存中。
 线程加锁前，将清空工作内存中共享变量的值，从而使用共享变量时需要从主内存中重新读取最新的值。
-volatile 的可见性都是通过内存屏障（Memnory Barrier）来实现的。
-synchronized 靠操作系统内核互斥锁实现，相当于 JMM 中的 lock、unlock。退出代码块时刷新变量到主内存。
+volatile 的可见性都是通过内存屏障（Memnory Barrier）来实现的。 底层指令 lock addl
+synchronized 靠操作系统内核互斥锁实现，底层指令：lock compxchg 相当于 JMM 中的 lock、unlock。退出代码块时刷新变量到主内存。
 ```
 
 
