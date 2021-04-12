@@ -248,6 +248,7 @@ epfd：Epoll 对应的文件描述符
 events: 表示调用者所有可用的事件的集合，maxevents 表示最多等到多少个事件返回
 阻塞等待 epfd 上的事件
 
+就绪事件列表 软中断，操作系统内核将事件放到 就绪时间列表
 ![](./epoll_rdlist.PNG)
 
 epoll有EPOLLLT和EPOLLET两种触发模式，LT是默认的模式，ET是“高速”模式。LT模式下，只要这个fd还有数据可读，每次 epoll_wait都会返回它的事件，提醒用户程序去操作，而在ET（边缘触发）模式中，它只会提示一次，直到下次再有数据流入之前都不会再提示了，无 论fd中是否还有数据可读。所以在ET模式下，read一个fd的时候一定要把它的buffer读光，也就是说一直读到read的返回值小于请求值，或者 遇到EAGAIN错误。还有一个特点是，epoll使用“事件”的就绪通知方式，通过epoll_ctl注册fd，一旦该fd就绪，内核就会采用类似callback的回调机制来激活该fd，epoll_wait便可以收到通知。
