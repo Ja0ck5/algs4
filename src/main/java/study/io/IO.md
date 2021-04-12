@@ -225,15 +225,28 @@ poll本质上和select没有区别，它将用户传入的数组拷贝到内核�
 
 ![](./epoll-function-params.PNG)
 
-epoll_create
+epoll_create (open epoll File Descriptor, create an epoll instance)
+
+create 返回 epfd epollFileDescriptor
 
 ![](./epoll_create.PNG)
 
 epoll_ctl
 ![](./epoll_ctl.PNG)
 
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *evnt)
+
+EPOLL_CTL_ADD : 注册新的 fd 到 epfd 中，并关联事件 event
+EPOLL_CTL_MOD : 修改已经注册的 fd 的监听事件
+EPOLL_CTL_DEL : 从 epfd 中移除 fd , 并且忽略绑定的 event ,这时 event 为null
+
 epoll_wait
 ![](./epoll_wait.PNG)
+
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout)
+epfd：Epoll 对应的文件描述符
+events: 表示调用者所有可用的事件的集合，maxevents 表示最多等到多少个事件返回
+阻塞等待 epfd 上的事件
 
 ![](./epoll_rdlist.PNG)
 
