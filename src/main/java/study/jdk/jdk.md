@@ -1405,6 +1405,74 @@ final void runWorker(Worker w) {
 
 ```
 
+##### getTask
+```java
+// 此方法有三种可能：
+// 1. 阻塞直到获取到任务返回。我们知道，默认 corePoolSize 之内的线程是不会被回收的，
+//      它们会一直等待任务
+// 2. 超时退出。keepAliveTime 起作用的时候，也就是如果这么多时间内都没有任务，那么应该执行关闭
+// 3. 如果发生了以下条件，此方法必须返回 null:
+//    - 池中有大于 maximumPoolSize 个 workers 存在(通过调用 setMaximumPoolSize 进行设置)
+//    - 线程池处于 SHUTDOWN，而且 workQueue 是空的，前面说了，这种不再接受新的任务
+//    - 线程池处于 STOP，不仅不接受新的线程，连 workQueue 中的线程也不再执行
+private Runnable getTask() {
+    boolean timedOut = false; // Did the last poll() time out?
+  
+    retry:
+    for (;;) {
+        int c = ctl.get();
+        int rs = runStateOf(c);
+        // 两种可能
+        // 1. rs == SHUTDOWN && workQueue.isEmpty()
+        // 2. rs >= STOP
+        if (rs >= SHUTDOWN && (rs >= STOP || workQueue.isEmpty())) {
+            // CAS 操作，减少工作线程数
+            decrementWorkerCount();
+            return null;
+        }
+        boolean timed;      // Are workers subject to culling?
+        for (;;) {
+            int wc = workerCountOf(c);
+            // 允许核心线程数内的线程回收，或当前线程数超过了核心线程数，那么有可能发生超时关闭
+            timed = allowCoreThreadTimeOut || wc > corePoolSize;
+            // 这里 break，是为了不往下执行后一个 if (compareAndDecrementWorkerCount(c))
+            // 两个 if 一起看：如果当前线程数 wc > maximumPoolSize，或者超时，都返回 null
+            // 那这里的问题来了，wc > maximumPoolSize 的情况，为什么要返回 null？
+            //    换句话说，返回 null 意味着关闭线程。
+            // 那是因为有可能开发者调用了 setMaximumPoolSize 将线程池的 maximumPoolSize 调小了
+            if (wc <= maximumPoolSize && ! (timedOut && timed))
+                break;
+            if (compareAndDecrementWorkerCount(c))
+                return null;
+            c = ctl.get();  // Re-read ctl
+            // compareAndDecrementWorkerCount(c) 失败，线程池中的线程数发生了改变
+            if (runStateOf(c) != rs)
+                continue retry;
+            // else CAS failed due to workerCount change; retry inner loop
+        }
+        // wc <= maximumPoolSize 同时没有超时
+        try {
+            // 到 workQueue 中获取任务
+            Runnable r = timed ?
+                workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
+                workQueue.take();
+            if (r != null)
+                return r;
+            timedOut = true;
+        } catch (InterruptedException retry) {
+            // 如果此 worker 发生了中断，采取的方案是重试
+            // 解释下为什么会发生中断，这个读者要去看 setMaximumPoolSize 方法，
+            // 如果开发者将 maximumPoolSize 调小了，导致其小于当前的 workers 数量，
+            // 那么意味着超出的部分线程要被关闭。重新进入 for 循环，自然会有部分线程会返回 null
+            timedOut = false;
+        }
+    }
+}
+
+```
+
+
+
 runWorker方法的执行过程：
 ```text
 
