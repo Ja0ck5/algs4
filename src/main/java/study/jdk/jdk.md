@@ -1169,6 +1169,263 @@ CLH：Craig、Landin and Hagersten队列，是单向链表，AQS中的队列是C
 
 CAS 底层依赖 lock cmpxchg 指令。 lock 指令在执行后面指令时锁定一个北桥信号(不采用锁定总线的方式)
 
+#### Multi-thread
+
+![](./Thread-state.jpg)
+
+![](./Thread-state-01.jpg)
+
+
+#### Threadpool
+
+![](./Threadpool-states.jpg)
+
+```java
+
+private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+// 这里 COUNT_BITS 设置为 29(32-3)，意味着前三位用于存放线程状态，后29位用于存放线程数
+// 很多初学者很喜欢在自己的代码中写很多 29 这种数字，或者某个特殊的字符串，然后分布在各个地方，这是非常糟糕的
+private static final int COUNT_BITS = Integer.SIZE - 3;
+// 000 11111111111111111111111111111
+// 这里得到的是 29 个 1，也就是说线程池的最大线程数是 2^29-1=536860911
+// 以我们现在计算机的实际情况，这个数量还是够用的
+private static final int CAPACITY   = (1 << COUNT_BITS) - 1;
+// 我们说了，线程池的状态存放在高 3 位中
+// 运算结果为 111跟29个0：111 00000000000000000000000000000
+private static final int RUNNING    = -1 << COUNT_BITS;
+// 000 00000000000000000000000000000
+private static final int SHUTDOWN   =  0 << COUNT_BITS;
+// 001 00000000000000000000000000000
+private static final int STOP       =  1 << COUNT_BITS;
+// 010 00000000000000000000000000000
+private static final int TIDYING    =  2 << COUNT_BITS;
+// 011 00000000000000000000000000000
+private static final int TERMINATED =  3 << COUNT_BITS;
+// 将整数 c 的低 29 位修改为 0，就得到了线程池的状态
+private static int runStateOf(int c)     { return c & ~CAPACITY; }
+// 将整数 c 的高 3 为修改为 0，就得到了线程池中的线程数
+private static int workerCountOf(int c)  { return c & CAPACITY; }
+private static int ctlOf(int rs, int wc) { return rs | wc; }
+/*
+ * Bit field accessors that don't require unpacking ctl.
+ * These depend on the bit layout and on workerCount being never negative.
+ */
+private static boolean runStateLessThan(int c, int s) {
+    return c < s;
+}
+private static boolean runStateAtLeast(int c, int s) {
+    return c >= s;
+}
+private static boolean isRunning(int c) {
+    return c < SHUTDOWN;
+}
+
+
+
+```
+
+```text
+
+
+1. 当workerCount <= corePoolSize，创建线程执行任务。
+
+2. 当workerCount >= corePoolSize&&阻塞队列workQueue未满，把新的任务放入阻塞队列。
+
+3. 当workQueue已满，并且workerCount >= corePoolSize，并且workerCount <= maximumPoolSize，创建线程执行任务。
+
+4. 当workQueue已满，workerCount >= maximumPoolSize，采取拒绝策略,默认拒绝策略是直接抛异常。
+
+
+```
+
+##### AddWorker
+
+```java
+
+private boolean addWorker(Runnable firstTask, boolean core) {
+    retry:
+    for (;;) {
+
+        int c = ctl.get();
+        //  获取运行状态
+        int rs = runStateOf(c);
+
+        // Check if queue empty only if necessary.
+        // 如果状态值 >= SHUTDOWN (不接新任务&不处理队列任务)
+        // 并且 如果 ！(rs为SHUTDOWN 且 firsTask为空 且 阻塞队列不为空)
+        if (rs >= SHUTDOWN &&
+            ! (rs == SHUTDOWN &&
+               firstTask == null &&
+               ! workQueue.isEmpty()))
+            // 返回false
+            return false;
+
+        for (;;) {
+            //获取线程数wc
+            int wc = workerCountOf(c);
+            // 如果wc大与容量 || core如果为true表示根据corePoolSize来比较,否则为maximumPoolSize
+            if (wc >= CAPACITY ||
+                wc >= (core ? corePoolSize : maximumPoolSize))
+                return false;
+            // 增加workerCount（原子操作）
+            if (compareAndIncrementWorkerCount(c))
+                // 如果增加成功，则跳出
+                break retry;
+            // wc增加失败，则再次获取runState
+            c = ctl.get();  // Re-read ctl
+            // 如果当前的运行状态不等于rs，说明状态已被改变，返回重新执行
+            if (runStateOf(c) != rs)
+                continue retry;
+            // else CAS failed due to workerCount change; retry inner loop
+        }
+    }
+
+    boolean workerStarted = false;
+    boolean workerAdded = false;
+    Worker w = null;
+    try {
+        // 根据firstTask来创建Worker对象
+        w = new Worker(firstTask);
+        // 根据worker创建一个线程
+        final Thread t = w.thread;
+        if (t != null) {
+            // new一个锁
+            final ReentrantLock mainLock = this.mainLock;
+            // 加锁
+            mainLock.lock();
+            try {
+                // Recheck while holding lock.
+                // Back out on ThreadFactory failure or if
+                // shut down before lock acquired.
+                // 获取runState
+                int rs = runStateOf(ctl.get());
+                // 如果rs小于SHUTDOWN(处于运行)或者(rs=SHUTDOWN && firstTask == null)
+                // firstTask == null证明只新建线程而不执行任务
+                if (rs < SHUTDOWN ||
+                    (rs == SHUTDOWN && firstTask == null)) {
+                    // 如果t活着就抛异常
+                    if (t.isAlive()) // precheck that t is startable
+                        throw new IllegalThreadStateException();
+                    // 否则加入worker(HashSet)
+                    //workers包含池中的所有工作线程。仅在持有mainLock时访问。
+                    workers.add(w);
+                    // 获取工作线程数量
+                    int s = workers.size();
+                    //largestPoolSize记录着线程池中出现过的最大线程数量
+                    if (s > largestPoolSize)
+                        // 如果 s比它还要大，则将s赋值给它
+                        largestPoolSize = s;
+                    // worker的添加工作状态改为true
+                    workerAdded = true;
+                }
+            } finally {
+                mainLock.unlock();
+            }
+            // 如果worker的添加工作完成
+            if (workerAdded) {
+                // 启动线程
+                t.start();
+                // 修改线程启动状态
+                workerStarted = true;
+            }
+        }
+    } finally {
+        if (! workerStarted)
+            addWorkerFailed(w);
+    }
+    // 返回线启动状态
+    return workerStarted;
+
+```
+
+为什么需要持有mainLock？
+因为workers是HashSet类型的，不能保证线程安全。
+
+##### runWorker
+
+```java
+
+final void runWorker(Worker w) {
+    // 拿到当前线程
+    Thread wt = Thread.currentThread();
+    // 拿到当前任务
+    Runnable task = w.firstTask;
+    // 将Worker.firstTask置空 并且释放锁
+    w.firstTask = null;
+    w.unlock(); // allow interrupts
+    boolean completedAbruptly = true;
+    try {
+        // 如果task或者getTask不为空，则一直循环
+        while (task != null || (task = getTask()) != null) {
+            // 加锁
+            w.lock();
+            // If pool is stopping, ensure thread is interrupted;
+            // if not, ensure thread is not interrupted.  This
+            // requires a recheck in second case to deal with
+            // shutdownNow race while clearing interrupt
+            //  return ctl.get() >= stop
+            // 如果线程池状态>=STOP 或者 (线程中断且线程池状态>=STOP)且当前线程没有中断
+            // 其实就是保证两点：
+            // 1. 线程池没有停止
+            // 2. 保证线程没有中断
+            if ((runStateAtLeast(ctl.get(), STOP) ||
+                 (Thread.interrupted() &&
+                  runStateAtLeast(ctl.get(), STOP))) &&
+                !wt.isInterrupted())
+                // 中断当前线程
+                wt.interrupt();
+            try {
+                // 空方法
+                beforeExecute(wt, task);
+                Throwable thrown = null;
+                try {
+                    // 执行run方法(Runable对象)
+                    task.run();
+                } catch (RuntimeException x) {
+                    thrown = x; throw x;
+                } catch (Error x) {
+                    thrown = x; throw x;
+                } catch (Throwable x) {
+                    thrown = x; throw new Error(x);
+                } finally {
+                    afterExecute(task, thrown);
+                }
+            } finally {
+                // 执行完后， 将task置空， 完成任务++， 释放锁
+                task = null;
+                w.completedTasks++;
+                w.unlock();
+            }
+        }
+        completedAbruptly = false;
+    } finally {
+        // 退出工作
+        processWorkerExit(w, completedAbruptly);
+    }
+
+```
+
+runWorker方法的执行过程：
+```text
+
+
+1. while循环中，不断地通过getTask()方法从workerQueue中获取任务
+
+2. 如果线程池正在停止，则中断线程。否则调用3.
+
+3. 调用task.run()执行任务；
+
+4. 如果task为null则跳出循环，执行processWorkerExit()方法，销毁线程workers.remove(w);
+
+```
+
+Worker为什么不使用ReentrantLock来实现呢？
+tryAcquire方法它是不允许重入的，而ReentrantLock是允许重入的。对于线程来说，如果线程正在执行是不允许其它锁重入进来的。
+
+线程只需要两个状态，一个是独占锁，表明正在执行任务；一个是不加锁，表明是空闲状态。
+
+在runWorker方法中，为什么要在执行任务的时候对每个工作线程都加锁呢？
+shutdown方法与getTask方法存在竞态条件.
 
 #### JVM GC
 
