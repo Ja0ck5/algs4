@@ -95,6 +95,22 @@ Spring 就不得不为其提前创建代理对象，否则注入的就是一个�
 Spring 需要三级缓存的目的是为了在没有循环依赖的情况下，延迟代理对象的创建，使 Bean 的创建符合 Spring 的设计原则
 
 
+#### 循环依赖
+
+spring对循环依赖的处理有三种情况：
+
+1. 构造器的循环依赖：这种依赖spring是处理不了的，直 接抛出BeanCurrentlylnCreationException异常。
+2. 单例模式下的setter循环依赖：通过“三级缓存”处理循环依赖。
+3. 非单例循环依赖：无法处理。
+
+spring单例对象的初始化大略分为三步：
+
+createBeanInstance：实例化，其实也就是调用对象的构造方法实例化对象
+populateBean：填充属性，这一步主要是多bean的依赖属性进行填充
+initializeBean：调用spring xml中的init 方法。
+
+
+
 ### 代理设计模式
 Spring AOP & AspectJ
 
@@ -115,3 +131,5 @@ HandlerMappingAdapter MethodBeforeAdviceInterceptor
 
 Spring AOP 和 AspectJ AOP 有什么区别?
 Spring AOP 属于运行时增强，而 AspectJ 是编译时增强。 Spring AOP 基于代理(Proxying)，而 AspectJ 基于字节码操作(Bytecode Manipulation)。
+
+
