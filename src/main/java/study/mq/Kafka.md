@@ -407,3 +407,24 @@ Learder HW = MIN(ISR_ALL(Replica(1)LEO,Replica(2)LEO, .... Replica(N)LEO))
 
 ## Kafka 流程
 ![](./Kafka-structure-01.png)
+
+
+### Kafka 保证消息不丢
+
+```text
+
+1. KafkaProducer send 使用回调，失败重试
+2. Consumer 手动提交(两次消费问题，业务自己处理)
+3. 假如 leader 副本所在的 broker 突然挂掉，那么就要从 follower 副本重新选出一个 leader ，但是 leader 的数据还有一些没有被 follower 副本的同步的话，就会造成消息丢失。
+   设置 acks = all 所有副本都要接收到该消息之后该消息才算真正成功被发送
+
+4. 设置 replication.factor >= 3
+   为了保证 leader 副本能有 follower 副本能同步消息，我们一般会为 topic 设置 replication.factor >= 3。这样就可以保证每个 分区(partition) 至少有 3 个副本。虽然造成了数据冗余，但是带来了数据的安全性。
+   
+5. min.insync.replicas > 1
+   一般情况下我们还需要设置 min.insync.replicas> 1 ，这样配置代表消息至少要被写入到 2 个副本才算是被成功发送。min.insync.replicas 的默认值为 1 ，在实际生产中应尽量避免默认值 1。
+6. 确保 replication.factor > min.insync.replicas
+
+7. unclean.leader.election.enable = false 当 leader 副本发生故障时就不会从 follower 副本中和 leader 同步程度达不到要求的副本中选择出 leader ，这样降低了消息丢失的可能性
+
+```
