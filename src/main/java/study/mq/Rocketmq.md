@@ -446,6 +446,48 @@ HA 核心是实现是从服务器在启动的时候主动向主服务器建立 T
 事务消息基于两阶段提交和定时任务事务状态回查机制
 ![][13]
 
+
+### Rocketmq 保证消息不丢
+
+#### Producer发送消息阶段
+1. 提供SYNC的发送消息方式，等待broker处理结果
+
+ 同步发送：Producer 向 broker 发送消息，阻塞当前线程等待 broker 响应 发送结果。
+
+ 异步发送：Producer 首先构建一个向 broker 发送消息的任务，把该任务提交给线程池，等执行完该任务时，回调用户自定义的回调函数，执行处理结果。
+
+ Oneway发送：Oneway 方式只负责发送请求，不等待应答，Producer只负责把请求发出去，而不处理响应结果。
+
+2. 重试3次，重试次数可以通过producer指定
+
+3.  roker提供多master模式，即使某台broker宕机了，保证消息可以投递到另外一台正常的broker上
+如果broker只有一个节点，则broker宕机了，即使producer有重试机制，也没用，因此利用多主模式，当某台broker宕机了，换一台broker进行投递
+
+#### Broker处理消息阶段
+
+1. 提供同步刷盘的策略
+
+如果刷盘策略为异步，broker并不会等待消息落盘就会返回producer成功，也就是说当broker所在的服务器突然宕机，则会丢失部分页的消息
+
+2. 提供主从模式，同时主从支持同步双写
+即使broker设置了同步刷盘，如果主broker磁盘损坏，也是会导致消息丢失。 因此可以给broker指定slave，同时设置master为SYNC_MASTER，然后将slave设置为同步刷盘策略
+
+此模式下，producer每发送一条消息，都会等消息投递到master和slave都落盘成功了，broker才会当作消息投递成功，保证休息不丢失。
+
+在broker端，消息丢失的可能性主要在于刷盘策略和同步机制。
+RocketMQ默认broker的刷盘策略为异步刷盘，如果有主从，同步策略也默认的是异步同步，这样子可以提高broker处理消息的效率，但是会有丢失的可能性。因此可以通过同步刷盘策略+同步slave策略+主从的方式解决丢失消息的可能。
+
+
+#### Consumer消费消息阶段
+
+1. consumer默认提供的是At least Once机制
+2. 消费消息重试机制
+
+
+
+ 
+
+
 [0]: https://leran2deeplearnjavawebtech.oss-cn-beijing.aliyuncs.com/learn/RocketMQ%E6%8A%80%E6%9C%AF%E5%86%85%E5%B9%95/4_1.png
 [1]: https://leran2deeplearnjavawebtech.oss-cn-beijing.aliyuncs.com/learn/RocketMQ%E6%8A%80%E6%9C%AF%E5%86%85%E5%B9%95/4_2.png
 [2]: https://leran2deeplearnjavawebtech.oss-cn-beijing.aliyuncs.com/learn/RocketMQ%E6%8A%80%E6%9C%AF%E5%86%85%E5%B9%95/4_3.png
