@@ -938,6 +938,40 @@ ABASE:
 
 ```
 
+```java
+
+// 代表Map中元素个数的的基础计数器，当无竞争时直接使用CAS方式更新该数值 
+transient volatile long baseCount; 
+/** 
+* sizeCtl用于table初始化和扩容控制，当为正数时表示table的扩容阈值（n * 0.75），当为负数时表示table正在初始化或者扩容，
+* -1表示table正在初始化，其他负值代表正在扩容，第一个扩容的线程会把扩容戳rs左移RESIZE_STAMP_SHIFT(默认16)位再加2更新设置到sizeCtl中(sizeCtl = (rs << 16) + 2)，
+* 每次一个新线程来扩容时都令sizeCtl = sizeCtl + 1，因此可根据sizeCtl计算出正在扩容的线程数，注释中所
+* 描述的 sizeCtl = -(1+threads)是不准确的。扩容时sizeCtl有两部分组成，第一部分是扩容戳，占据sizeCtl的高有效位，长度为
+* RESIZE_STAMP_BITS位（默认16），剩下的低有效位长度为32-RESIZE_STAMP_BITS位（16），每个新线程协助扩容时sizeCtl+1
+* ，直到所有的低有效位被占满，低有效位默认占16位（最高位为符号位），所以扩容线程数默认最大为65535
+*/
+transient volatile int sizeCtl; 
+/** 
+* 用于控制多个线程去扩容时领取扩容子任务，每个线程领取子任务时，要减去扩容步长，如果能减成功，
+* 则成功领取一个扩容子任务，`transferIndex = transferIndex - stride(扩容步长)`，transferIndex减到0时
+* 代表没有可以领取的扩容子任务。
+*/
+transient volatile int transferIndex; 
+// 扩容或者创建CounterCells时使用的自旋锁（使用CAS实现）；
+transient volatile int cellsBusy; 
+/** 
+* 存储Map中元素的计数器，当并发量较高时`baseCount`竞争较为激烈，更新效率较低，所以把变化的数值
+* 更新到`counterCells`中的某个节点上，计算size()时需要统计每个`counterCells`的大小再加上`baseCount`的数值。
+*/
+transient volatile CounterCell[] counterCells;
+/**
+* ConcurrentHashMap采用cas算法进行更新变量（table[i]，sizeCtl，transferIndex，cellsBusy等）来保证线程安全性，它其实是一种乐观策略，
+* 假设每次都不会产生冲突，所以能够直接更新成功，如果出现冲突则再重试，直到更新成功。实现cas主要是借助了`sun.misc.Unsafe`类，该类提供了
+* 诸多根据内存偏移量直接从内存中读取设置对象属性的底层操作。
+*/
+static final sun.misc.Unsafe U;
+
+```
 
 # AVL RBTree
 
