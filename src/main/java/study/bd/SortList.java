@@ -9,31 +9,35 @@ import study.linkedlist.ListNode;
 public class SortList {
 
     public ListNode sortList(ListNode head) {
-        if (head == null || head.next == null)
+        if(head == null || head.next == null){
             return head;
+        }
         ListNode fast = head.next, slow = head;
-        while (fast != null && fast.next != null) {
+        while(fast != null && fast.next != null){
             slow = slow.next;
             fast = fast.next.next;
         }
+
         ListNode mid = slow.next;
         slow.next = null;
 
-        ListNode left = sortList(head);
-        ListNode right = sortList(mid);
+        ListNode l = sortList(head);
+        ListNode r = sortList(mid);
         ListNode dummy = new ListNode(0);
         ListNode res = dummy;
-        while (left != null && right != null) {
-            if (left.val < right.val) {
-                dummy.next = left;
-                left = left.next;
-            } else {
-                dummy.next = right;
-                right = right.next;
+
+        while(l != null && r != null){
+            if(l.val < r.val){
+                dummy.next = l;
+                l = l.next;
+            }else{
+                dummy.next = r;
+                r = r.next;
             }
             dummy = dummy.next;
         }
-        dummy.next = left != null ? left : right;
+
+        dummy.next = l != null ? l : r;
         return res.next;
     }
 
