@@ -36,4 +36,16 @@ public class SortList {
         dummy.next = left != null ? left : right;
         return res.next;
     }
+
+    public static void main(String[] args) {
+        ListNode node = new ListNode(4);
+        node.next = new ListNode(2);
+        node.next.next = new ListNode(1);
+        node.next.next.next = new ListNode(6);
+        node.next.next.next.next = new ListNode(5);
+        node.next.next.next.next.next = new ListNode(2);
+        SortList sortList = new SortList();
+        ListNode listNode = sortList.sortList(node);
+        System.out.println(listNode);
+    }
 }
