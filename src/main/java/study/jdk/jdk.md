@@ -938,40 +938,6 @@ ABASE:
 
 ```
 
-```java
-
-// 代表Map中元素个数的的基础计数器，当无竞争时直接使用CAS方式更新该数值 
-transient volatile long baseCount; 
-/** 
-* sizeCtl用于table初始化和扩容控制，当为正数时表示table的扩容阈值（n * 0.75），当为负数时表示table正在初始化或者扩容，
-* -1表示table正在初始化，其他负值代表正在扩容，第一个扩容的线程会把扩容戳rs左移RESIZE_STAMP_SHIFT(默认16)位再加2更新设置到sizeCtl中(sizeCtl = (rs << 16) + 2)，
-* 每次一个新线程来扩容时都令sizeCtl = sizeCtl + 1，因此可根据sizeCtl计算出正在扩容的线程数，注释中所
-* 描述的 sizeCtl = -(1+threads)是不准确的。扩容时sizeCtl有两部分组成，第一部分是扩容戳，占据sizeCtl的高有效位，长度为
-* RESIZE_STAMP_BITS位（默认16），剩下的低有效位长度为32-RESIZE_STAMP_BITS位（16），每个新线程协助扩容时sizeCtl+1
-* ，直到所有的低有效位被占满，低有效位默认占16位（最高位为符号位），所以扩容线程数默认最大为65535
-*/
-transient volatile int sizeCtl; 
-/** 
-* 用于控制多个线程去扩容时领取扩容子任务，每个线程领取子任务时，要减去扩容步长，如果能减成功，
-* 则成功领取一个扩容子任务，`transferIndex = transferIndex - stride(扩容步长)`，transferIndex减到0时
-* 代表没有可以领取的扩容子任务。
-*/
-transient volatile int transferIndex; 
-// 扩容或者创建CounterCells时使用的自旋锁（使用CAS实现）；
-transient volatile int cellsBusy; 
-/** 
-* 存储Map中元素的计数器，当并发量较高时`baseCount`竞争较为激烈，更新效率较低，所以把变化的数值
-* 更新到`counterCells`中的某个节点上，计算size()时需要统计每个`counterCells`的大小再加上`baseCount`的数值。
-*/
-transient volatile CounterCell[] counterCells;
-/**
-* ConcurrentHashMap采用cas算法进行更新变量（table[i]，sizeCtl，transferIndex，cellsBusy等）来保证线程安全性，它其实是一种乐观策略，
-* 假设每次都不会产生冲突，所以能够直接更新成功，如果出现冲突则再重试，直到更新成功。实现cas主要是借助了`sun.misc.Unsafe`类，该类提供了
-* 诸多根据内存偏移量直接从内存中读取设置对象属性的底层操作。
-*/
-static final sun.misc.Unsafe U;
-
-```
 
 # AVL RBTree
 
@@ -1544,4 +1510,118 @@ shutdown方法与getTask方法存在竞态条件.
 完整对象
 ![](./Full-object.PNG)
 
+### GC
 
+![](./Garbage-Collectors.PNG)
+
+Young:
+    Serial:
+    ParNew: 并行垃圾收集，与CMS 配合使用
+    ParallelScavenge: 达到一个可控制的吞吐量（Throughput）
+    
+Old:
+    CMS: ConcurrentMarkSweep 尽可能地缩短垃圾收集时用户线程的停顿时间
+    初始标记 并发标记 重新标记 并发清理
+    Serial Old:
+    ParallelOld:
+
+Java8 默认： ParallelScavenge + ParallelOld
+
+不区分年代：
+### G1: 整堆收集器
+
+1. 是一个并行回收器，它把堆内存分割为很多不相关的区域（Region） （物理上 不连续的）。
+
+使用不同的Region来表示Eden、幸存者0区，幸存者1区，老年代等。
+
+2. G1 GC有计划地避免在整个Java 堆中进行全区域的垃圾收集。
+
+G1跟踪各个Region 里面的垃圾堆积的价值大小（回收所获得的空间大小以及回收所需时间的经验值），
+
+在后台维护一个优先列表，每次根据允许的收集时间，优先回收价值最大的Region。
+
+3. 由于这种方式的侧重点在于回收垃圾最大量的区间（Region），所以我们给G1一个名字：垃圾优先（Garbage First）
+
+4. G1 （Garbage一First） 是一款面向服务端应用的垃圾收集器，主要针对配备多核CPU及大容量内存的机器，以极高概率满足GC停顿时间的同时，还兼具高吞吐量的性能特征
+
+5. G1在jdk8中还不是默认的垃圾回收器，需要使用一XX： +UseG1GC来启用。
+
+#### G1垃圾回收器优势
+
+```text
+
+1. 并行与并发
+   ➢并行性： G1在回收期间，可以有多个Gc线程同时工作，有效利用多核计算能力。此时用户线程STW
+   ➢并发性： G1拥有与应用程序交替执行的能力，部分工作可以和应用程序同时执行，因此，不会在整个回收阶段发生完全阻塞应用程序的情况
+
+2. 分代收集
+   ➢从分代上看，G1依然属于分代型垃圾回收器，它会区分年轻代和老年代，年轻代依然有Eden区和Survivor区。但从堆的结构上看，它不要求整个Eden区、年轻代或者老年代都是连续的，也不再坚持固定大小和固定数量。
+   ➢将堆空间分为若干个区域（Region） ，这些区域中包含了逻辑上的年轻代和老年代。
+   ➢和之前的各类回收器不同，它同时兼顾年轻代和老年代。对比其他回收器，或者工作在年轻代，或者工作在老年代；
+
+3. 空间整合
+   ➢CMS： “标记一清除”算法、内存碎片、若干次Gc后进行一次碎片整理
+   ➢G1将内存划分为一个个的region。 内存的回收是以region作为基本单位的。Region之间是复制算法。
+   但整体上实际可看作是标记一压缩（Mark一Compact）算法， 两种算法都可以避免内存碎片。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC 尤其是当Java堆非常大的时候，G1的优势更加明显
+
+4. 可预测的停顿时间模型（即：软实时soft real一time）
+
+5. G1相对于CMS的另一大优势，G1除了追求低停顿外，还能建立可预测的停顿时间模型，能让使用者明确指定在一个长度为M毫秒的时间片段内，消耗在垃圾收集上的时间不得超过N毫秒。
+   ➢由于分区的原因，G1可以只选取部分区域进行内存回收，这样缩小了回收的范围，因此对于全局停顿情况的发生也能得到较好的控制。
+   ➢G1跟踪各个Region里面的垃圾堆积的价值大小（回收所获得的空间大小以 及回收所需时间的经验值），在后台维护一个优先列表，每次根据允许的收集时间，优先回收价值最大的Region。保证了G1 收集器在有限的时间内可以获取尽可能高的收集效率。
+   ➢相比于CMSGC，G1未必能做到CMS在最好情况下的延时停顿，但是最差情况要.好很多。
+
+
+https://www.cnblogs.com/yanl55555/p/13366387.html
+
+```
+
+![](./G1-01.png)
+
+
+
+ZGC:
+
+Epsilon/Shenandoah:
+
+
+### JVM 调优
+jsp 
+jstack [pid] 列出所有线程
+
+top -Hp [pid] 查看哪个线程占 cpu mem
+
+Arthas dashboard
+thread
+thread [thread-id]
+
+
+### 1. 频繁 FullGC CPU 100% OOM
+jps
+jmap(不能随便用) -histo [pid] : 占内存的对象及占用情况罗列 查看堆内对象示例的统计信息、查看ClassLoader 的信息
+定位最多的 Instances 定位问题
+
+Jira 缺陷跟蹤管理系統 出问题，PSPO -> G1, 分配大对象不用找连续内存空间了。
+
+实际： java -Xms2G -Xmx2G -XX:+UseParallelGC -XX:+HeapDumpOnOutOfMemoryError
+
+
+###2. 分库分表
+1. ShardingJDBC MyCat
+2. 想要跨机器 join 了分库分表，速度慢，前面的微服务 访问当前服务，超时重试
+3. 每次重试都 join
+
+### 3. Disruptor
+1. Kafka/RocketMq 消息丢到其他机器
+2. 其他机器是 Disruptor ,每次500条，Disruptor 没有重复的数据覆盖的时候，一直存在，就会爆
+
+内存充裕，FGC 
+1. 大对象，连续空间不够
+2. System.gc
+3. 方法区 或者 元空间 满了
+
+
+
+
+
+  
