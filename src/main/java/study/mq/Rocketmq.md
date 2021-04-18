@@ -508,6 +508,20 @@ Broker 每 30s 注册一次路由信息
 ![](./Rocketmq-store.PNG)
 ![](./Rocketmq-mmap.PNG)
 
+### RocketMQ ConsumerQueue
+
+本质是消息CommitLog的索引文件
+![](./Rocketmq-consumerqueue.PNG)
+![](./Rocketmq-consumerqueue-01.PNG)
+
+### RocketMQ 事务
+![](./Rocketmq-transaction.PNG)
+![](./Rocketmq-transaction-01.PNG)
+![](./Rocketmq-transaction-02.PNG)
+
+回查机制(15次)
+
+
 
 
  
