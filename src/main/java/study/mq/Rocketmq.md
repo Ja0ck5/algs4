@@ -485,6 +485,31 @@ RocketMQ默认broker的刷盘策略为异步刷盘，如果有主从，同步策
 
 
 
+
+
+
+
+## Rocket MQ
+
+![](./Rocket-mq-model.PNG)
+
+## RocketMQ 组件
+![](./Rocketmq-assembly.PNG)
+
+NameServer 每 10s 扫描一次 Broker
+Broker 每 30s 注册一次路由信息
+
+## RocketMQ Producer 
+### Producer 寻址
+
+### Producer 重试机制
+
+### RocketMQ 高效存储
+![](./Rocketmq-store.PNG)
+![](./Rocketmq-mmap.PNG)
+
+
+
  
 
 
