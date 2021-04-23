@@ -38,7 +38,7 @@ import java.util.List;
  * @createTime 2021-04-21 12:45
  */
 public class RussianDollEnvelopes {
-    Comparator<int[]> c = (o1 , o2) -> {
+    static Comparator<int[]> c = (o1 , o2) -> {
         if(o1[0] != o2[0]){
             return o1[0] - o2[0];
         }else{
@@ -80,5 +80,25 @@ public class RussianDollEnvelopes {
         return low;
     }
 
+    public int maxEnvelopes2(int[][] envelopes) {
+        int n = envelopes.length;
+        if (n == 0) {
+            return 0;
+        }
+        Arrays.sort(envelopes, c);
+
+        int[] dp = new int[n];
+        Arrays.fill(dp, 1);
+        int ans = 1;
+        for (int i = 1; i < n; i++) {
+            for (int j = 0; j < i; j++) {
+                if (envelopes[i][1] > envelopes[j][1]) {
+                    dp[i] = Math.max(dp[i], dp[j] + 1);
+                }
+            }
+            ans = Math.max(ans, dp[i]);
+        }
+        return ans;
+    }
 
 }
