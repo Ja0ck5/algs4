@@ -428,3 +428,137 @@ Learder HW = MIN(ISR_ALL(Replica(1)LEO,Replica(2)LEO, .... Replica(N)LEO))
 7. unclean.leader.election.enable = false 当 leader 副本发生故障时就不会从 follower 副本中和 leader 同步程度达不到要求的副本中选择出 leader ，这样降低了消息丢失的可能性
 
 ```
+
+### Coordinator
+
+```text
+Coordinator一般指的是运行在broker上的group Coordinator，用于管理Consumer Group中各个成员，每个KafkaServer都有一个GroupCoordinator实例，管理多个消费者组,
+
+主要用于offset位移管理和Consumer Rebalance
+
+```
+
+#### Coordinator存储的信息
+
+对于每个Consumer Group，Coordinator会存储以下信息：
+
+1. 对每个存在的topic，可以有多个消费组group订阅同一个topic(对应消息系统中的广播)
+
+2. 对每个Consumer Group，元数据如下：
+```text
+
+订阅的topics列表
+Consumer Group配置信息，包括session timeout等
+组中每个Consumer的元数据。包括主机名，consumer id
+每个正在消费的topic partition的当前offsets
+Partition的ownership元数据，包括consumer消费的partitions映射关系
+```
+
+#### 如何确定consumer group的coordinator
+
+1. 确定consumer group位移信息写入__consumers_offsets这个topic的哪个分区。具体计算公式：
+
+__consumers_offsets partition# = Math.abs(groupId.hashCode() % groupMetadataTopicPartitionCount) 
+
+注意：groupMetadataTopicPartitionCount由offsets.topic.num.partitions指定，默认是50个分区。
+
+
+2. 该分区leader所在的broker就是被选定的coordinator
+
+
+#### Coordinator工作过程
+
+offset位移管理
+消费者在消费的过程中需要记录自己消费了多少数据，即消费位置信息。在Kafka中这个位置信息有个专门的术语：位移(offset)。
+(1)、很多消息引擎都把这部分信息保存在服务器端(broker端)。这样做的好处当然是实现简单，但会有三个主要的问题：
+1. broker从此变成有状态的，会影响伸缩性；
+2. 需要引入应答机制(acknowledgement)来确认消费成功。
+3. 由于要保存很多consumer的offset信息，必然引入复杂的数据结构，造成资源浪费。
+而Kafka选择了不同的方式：每个consumer group管理自己的位移信息，那么只需要简单的一个整数表示位置就够了；同时可以引入checkpoint机制定期持久化，简化了应答机制的实现。
+(2)、Kafka默认是定期帮你自动提交位移的(enable.auto.commit = true)，你当然可以选择手动提交位移实现自己控制。
+(3)、另外kafka会定期把group消费情况保存起来
+
+
+增加__consumeroffsets topic，将offset信息写入这个topic，摆脱对zookeeper的依赖(指保存offset这件事情)。__consumer_offsets中的消息保存了每个consumer group某一时刻提交的offset信息。
+
+__consumers_offsets topic配置了compact策略，使得它总是能够保存最新的位移信息，既控制了该topic总体的日志容量，也能实现保存最新offset的目的
+
+
+### Rebalance
+
+```text
+
+rebalance本质上是一组协议。group与coordinator共同使用它来完成group的rebalance。目前kafka提供了5个协议来处理与consumer group coordination相关的问题：
+
+Heartbeat请求：consumer需要定期给coordinator发送心跳来表明自己还活着
+
+LeaveGroup请求：主动告诉coordinator我要离开consumer group
+
+SyncGroup请求：group leader把分配方案告诉组内所有成员
+
+JoinGroup请求：成员请求加入组
+
+DescribeGroup请求：显示组的所有信息，包括成员信息，协议名称，分配方案，订阅信息等。通常该请求是给管理员使用
+
+Coordinator在rebalance的时候主要用到了前面4种请求。
+
+```
+
+rebalance的前提是coordinator已经确定了。
+
+总体而言，rebalance分为2步：Join和Sync
+
+
+ Join， 顾名思义就是加入组。
+ 
+ 这一步中，所有成员都向coordinator发送JoinGroup请求，请求入组。
+ 
+ 一旦所有成员都发送了JoinGroup请求，coordinator会从中选择一个consumer担任leader的角色，并把组成员信息以及订阅信息发给leader——注意leader和coordinator不是一个概念。
+ 
+ leader负责消费分配方案的制定。
+
+
+![](./Kafka-rebalance-01.jpg)
+
+
+Sync，这一步leader开始分配消费方案，即哪个consumer负责消费哪些topic的哪些partition。
+
+一旦完成分配，leader会将这个方案封装进SyncGroup请求中发给coordinator，非leader也会发SyncGroup请求，只是内容为空。
+
+coordinator接收到分配方案之后会把方案塞进SyncGroup的response中发给各个consumer。这样组内的所有成员就都知道自己应该消费哪些分区了。
+
+
+![](./kafka-rebalance-02.jpg)
+
+
+
+### Rebalance 场景分析
+
+#### 新成员加入组
+
+![](./Kafka-rebalance-03.jpg)
+
+
+#### 组成员“崩溃”
+
+成员崩溃和组成员主动离开是两个不同的场景。因为在崩溃时成员并不会主动地告知coordinator此事，coordinator有可能需要一个完整的session.timeout周期(心跳周期)才能检测到这种崩溃，这必然会造成consumer的滞后。可以说离开组是主动地发起rebalance；而崩溃则是被动地发起rebalance。
+
+#### 提交位移 (需要在超时前完成)
+
+### 如何避免不必要的rebalance
+
+要避免 Rebalance，还是要从 Rebalance 发生的时机入手。我们在前面说过，Rebalance 发生的时机有三个：
+
+```text
+
+1. 组成员数量发生变化
+
+2. 订阅主题数量发生变化
+
+3. 订阅主题的分区数发生变化
+
+```
+
+后两个我们大可以人为的避免，发生rebalance最常见的原因是消费组成员的变化。
+
+
