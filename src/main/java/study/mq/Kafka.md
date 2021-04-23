@@ -562,3 +562,102 @@ coordinator接收到分配方案之后会把方案塞进SyncGroup的response中�
 后两个我们大可以人为的避免，发生rebalance最常见的原因是消费组成员的变化。
 
 
+消费者成员正常的添加和停掉导致rebalance，这种情况无法避免，但是时在某些情况下，Consumer 实例会被 Coordinator 错误地认为 “已停止” 从而被“踢出”Group。从而导致rebalance。
+
+除了这个参数，Consumer 还提供了一个控制发送心跳请求频率的参数，就是 heartbeat.interval.ms。这个值设置得越小，Consumer 实例发送心跳请求的频率就越高。频繁地发送心跳请求会额外消耗带宽资源，但好处是能够更加快速地知晓当前是否开启 Rebalance，因为，目前 Coordinator 通知各个 Consumer 实例开启 Rebalance 的方法，就是将 REBALANCE_NEEDED 标志封装进心跳请求的响应体中。
+
+除了以上两个参数，Consumer 端还有一个参数，用于控制 Consumer 实际消费能力对 Rebalance 的影响，即 max.poll.interval.ms 参数。它限定了 Consumer 端应用程序两次调用 poll 方法的最大时间间隔。它的默认值是 5 分钟，表示你的 Consumer 程序如果在 5 分钟之内无法消费完 poll 方法返回的消息，那么 Consumer 会主动发起 “离开组” 的请求，Coordinator 也会开启新一轮 Rebalance。
+
+通过上面的分析，我们可以看一下那些rebalance是可以避免的：
+
+第一类非必要 Rebalance 是因为未能及时发送心跳，导致 Consumer 被 “踢出”Group 而引发的。这种情况下我们可以设置 session.timeout.ms 和 heartbeat.interval.ms 的值，来尽量避免rebalance的出现。（以下的配置是在网上找到的最佳实践，暂时还没测试过）
+
+设置 session.timeout.ms = 6s。
+设置 heartbeat.interval.ms = 2s。
+要保证 Consumer 实例在被判定为 “dead” 之前，能够发送至少 3 轮的心跳请求，即 session.timeout.ms >= 3 * heartbeat.interval.ms。
+将 session.timeout.ms 设置成 6s 主要是为了让 Coordinator 能够更快地定位已经挂掉的 Consumer，早日把它们踢出 Group。
+
+第二类非必要 Rebalance 是 Consumer 消费时间过长导致的。此时，max.poll.interval.ms 参数值的设置显得尤为关键。如果要避免非预期的 Rebalance，你最好将该参数值设置得大一点，比你的下游最大处理时间稍长一点。
+
+总之，要为业务处理逻辑留下充足的时间。这样，Consumer 就不会因为处理这些消息的时间太长而引发 Rebalance 。
+
+相关概念
+coordinator
+Group Coordinator是一个服务，每个Broker在启动的时候都会启动一个该服务。Group Coordinator的作用是用来存储Group的相关Meta信息，并将对应Partition的Offset信息记录到Kafka内置Topic(__consumer_offsets)中。Kafka在0.9之前是基于Zookeeper来存储Partition的Offset信息(consumers/{group}/offsets/{topic}/{partition})，因为ZK并不适用于频繁的写操作，所以在0.9之后通过内置Topic的方式来记录对应Partition的Offset。
+
+每个Group都会选择一个Coordinator来完成自己组内各Partition的Offset信息，选择的规则如下：
+
+1，计算Group对应在__consumer_offsets上的Partition
+2，根据对应的Partition寻找该Partition的leader所对应的Broker，该Broker上的Group Coordinator即就是该Group的Coordinator
+Partition计算规则：
+
+partition-Id(__consumer_offsets) = Math.abs(groupId.hashCode() % groupMetadataTopicPartitionCount)
+其中groupMetadataTopicPartitionCount对应offsets.topic.num.partitions参数值，默认值是50个分区
+
+
+### Rebalance Listener
+因为触发Rebalance的可能性太多，并且在实际的工作中并不是所有的Rebalance都是有益的，所以可以在代码层面实现对Rebalance的监控，从而根据真实的业务场景做出相应的对策。这里贴出监控Demo：通过在客户端维护Offset信息可以自定义控制消息的commit，尽可能保证Exactly Once语义，避免重复消费。
+```java
+
+/**
+ * ConsumerRebalanceListener: 监听客户端Rebalance 包含两个方法onPartitionsRevoked和onPartitionsAssigned
+ * 
+ * onPartitionsRevoked： 在客户端停止消费消息后、在Rebalance开始前调用可以在此时提交offset信息、保证在Rebalance后的consumer可以准确知晓Partition的消费起点
+ * onPartitionsAssigned：在Rebalance完成后调用
+ *
+ * @author yhyr
+ */
+public class ConsumerRebalanceListenerDemo {
+    private static Map<TopicPartition, OffsetAndMetadata> currentOffsets = new HashMap<>();
+    private static List<String> topics = Collections.singletonList("demoTopic");
+    private static KafkaConsumer<String, String> consumer;
+    static {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "localhost:9092");
+        props.put("group.id", "group_test");
+        props.put("enable.auto.commit", "true");
+        props.put("auto.commit.interval.ms", "1000");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumer = new KafkaConsumer<>(props);
+    }
+
+    private class CustomHandleRebalance implements ConsumerRebalanceListener {
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> collection) {
+            System.out.println("Before Rebalance, Assignment partitions is : " + collection.toString());
+            System.out.println("Before Rebalance, Each partition's lastest consumer offset : "
+                + currentOffsets.toString());
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> collection) {
+            System.out.println("After Rebalance, Assignment partitions is : " + collection.toString());
+            System.out.println("After Rebalance, Each partition's lastest consumer offset : "
+                + currentOffsets.toString());
+        }
+    }
+
+    private void consumer() {
+        // 通过自定义Rebalance监听方式来订阅Topic
+        consumer.subscribe(topics, new CustomHandleRebalance());
+        while (true) {
+            ConsumerRecords<String, String> records = consumer.poll(100);
+            for (ConsumerRecord<String, String> record : records) {
+                // deal with msg
+                System.out.println("Current Processing msg info : " + record.toString());
+                // increase offset
+                currentOffsets.put(new TopicPartition(record.topic(), record.partition()),
+                    new OffsetAndMetadata(record.offset() + 1));
+            }
+            // submit offset by consumer.commitSync() or consumer.commitAsync() if you need; Default kafka auto commit
+        }
+    }
+
+    public static void main(String[] args) {
+        ConsumerRebalanceListenerDemo action = new ConsumerRebalanceListenerDemo();
+        action.consumer();
+    }
+}
+
+```
