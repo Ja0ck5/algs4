@@ -616,6 +616,22 @@ if (delay > server.cluster_node_timeout) {
 
 ```
 
+### 集群是如何做到 key 迁移不阻塞集群服务的呢？
+
+
+key 迁移过程中，涉及到 CLUSTER SETSLOT slot8 MIGRATING node 命令和 CLUSTER SETSLOT slot8 IMPORTING node 命令，前者用于将给定节点 node 中的槽 slot8 迁移出节点，而后者用于将给定槽 slot8 导入到节点 node ：
+
+
+```text
+
+(1)、如果一个槽被设置为 MIGRATING 状态时，原本持有该槽的节点会继续接受关于这个槽的命令请求，但只有当键存在于该节点时，节点才会处理这个请求。如果命令所使用的键不存在于该节点，那么节点将向客户端返回一个 ASK 转向（redirection）错误，告知客户端，要将命令请求发送到槽的迁移目标节点。
+
+
+
+(2)、如果一个槽被设置为 IMPORTING 状态时，节点仅在接收到 ASKING 命令之后，才会接受关于这个槽的命令请求。如果客户端向节点发送该槽的数据请求，命令为非 ASKING 时，那么节点会使用 MOVED 转向错误将命令请求转向至真正负责处理这个槽的节点。
+
+```
+
 
 ## 高并发点赞
 
