@@ -617,3 +617,15 @@ if (delay > server.cluster_node_timeout) {
 ```
 
 
+## 高并发点赞
+
+1. mq 削峰
+2. redis (不需要列表的话，就记录个人的，用hash 没关系，记录视频的用hash 应该也没问题，我看看这步能不能优化)
+3. 异步刷DB，补偿计算，将结果同步回 redis
+4. 还可以将点赞数高的，expire 可以调高一点，点赞数低的 expire 调小一点
+5. hyperloglog 统计(如果需要的话)
+
+缓存设计    HyperLogLog
+Redis HyperLogLog 是用来做基数统计的算法，HyperLogLog 的优点是，在输入元素的数量或者体积非常非常大时，计算基数所需的空间总是固定 的、并且是很小的。
+在 Redis 里面，每个 HyperLogLog 键只需要花费 12 KB 内存，就可以计算接近 2^64 个不同元素的基 数。这和计算基数时，元素越多耗费内存就越多的集合形成鲜明对比。
+但是，因为 HyperLogLog 只会根据输入元素来计算基数，而不会储存输入元素本身，所以 HyperLogLog 不能像集合那样，返回输入的各个元素。
