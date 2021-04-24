@@ -53,11 +53,11 @@ public class RebuildBinaryTree {
         int inorderRootIdx = dic.get(preorder[preRootIdx]);// 划分根节点、左子树、右子树
         // 左子树的根节点就是 左子树的(前序遍历）第一个，就是+1([preRootIdx|leftIdx|rightIdx])
         // 左边边界就是left，右边边界是(中序遍历)中间区分的i-1
-        node.left = recur(preRootIdx + 1, inLeftIdx, inorderRootIdx - 1);
+        node.left = recur(preRootIdx + 1/*left tree root*/, inLeftIdx, inorderRootIdx - 1);
         //右子树的根，就是右子树（前序遍历）的第一个,就是当前根节点 加上左子树的数量
         // preRootIdx 当前的根,  左子树的长度 = 左子树的左边-右边 (inorderRootIdx-1 - inLeftIdx +1) 。最后+1就是右子树的根了
         /*[preRoot|left|right],*/
-        node.right = recur(preRootIdx + (inorderRootIdx - inLeftIdx) + 1, inorderRootIdx + 1, inRightIdx);
+        node.right = recur(preRootIdx + (inorderRootIdx - inLeftIdx) + 1/*right tree root*/, inorderRootIdx + 1, inRightIdx);
         return node;                                           // 回溯返回根节点
     }
 
