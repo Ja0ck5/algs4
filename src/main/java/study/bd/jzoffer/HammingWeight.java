@@ -10,6 +10,7 @@ public class HammingWeight {
         int res = 0;
         while(n != 0) {
             res++;
+            // 消去数字 n 最右边的 1
             n &= n - 1;
         }
         return res;
