@@ -668,5 +668,87 @@ ES 中一个索引由一个或多个 lucene 索引构成，一个 lucene 索引�
 默认情况下 routing 参数是文档 ID (murmurhash3),可通过 URL 中的 _routing 参数指定数据分布在同一个分片中，index 和 search 的时候都需要一致才能找到数据，如果能明确根据_routing 进行数据分区，则可减少分片的检索工作，以提高性能。
 
 
+### 优化检索
+
+优化检索性能
+
+
+
+1）关闭不需要字段的 doc values。
+
+
+
+2）尽量使用 keyword 替代一些 long 或者 int 之类，term 查询总比 range 查询好 (http://lucene.apache.org/core/7_4_0/core/org/apache/lucene/index/PointValues.html)。
+
+
+
+3）关闭不需要查询字段的_source 功能，不将此存储仅 ES 中，以节省磁盘空间。
+
+
+
+4）评分消耗资源，如果不需要可使用 filter 过滤来达到关闭评分功能，score 则为 0，如果使用 constantScoreQuery 则 score 为 1。
+
+
+
+5）关于分页：
+
+
+
+①from + size:
+
+
+
+每分片检索结果数最大为 from + size，假设 from = 20, size = 20，则每个分片需要获取 20 * 20 = 400 条数据，多个分片的结果在协调节点合并(假设请求的分配数为 5，则结果数最大为 400*5 = 2000 条) 再在内存中排序后然后 20 条给用户。这种机制导致越往后分页获取的代价越高，达到 50000 条将面临沉重的代价，默认 from + size 默认如下：
+
+
+
+index.max_result_window ：10000
+
+
+
+②search_after:  使用前一个分页记录的最后一条来检索下一个分页记录，在我们的案例中，首先使用 from+size，检索出结果后再使用 search_after，在页面上我们限制了用户只能跳 5 页，不能跳到最后一页。
+
+
+
+③scroll 用于大结果集查询，缺陷是需要维护 scroll_id
+
+
+
+6）关于排序：我们增加一个 long 字段，它用于存储时间和 ID 的组合(通过移位即可)，正排与倒排性能相差不明显。
+
+
+
+7）关于 CPU 消耗，检索时如果需要做排序则需要字段对比，消耗 CPU 比较大，如果有可能尽量分配 16cores 以上的 CPU，具体看业务压力。
+
+
+
+8）关于合并被标记删除的记录，我们设置为 0 表示在合并的时候一定删除被标记的记录，默认应该是大于 10%才删除：“merge.policy.expunge_deletes_allowed”: “0”。
+
+```json
+
+{
+    "mappings": {
+        "data": {
+            "dynamic": "false",
+            "_source": {
+                "includes": ["XXX"]  -- 仅将查询结果所需的数据存储仅_source中
+            },
+            "properties": {
+                "state": {
+                    "type": "keyword",   -- 虽然state为int值，但如果不需要做范围查询，尽量使用keyword，因为int需要比keyword增加额外的消耗。
+                    "doc_values": false  -- 关闭不需要字段的doc values功能，仅对需要排序，汇聚功能的字段开启。
+                },
+                "b": {
+                    "type": "long"    -- 使用了范围查询字段，则需要用long或者int之类 （构建类似KD-trees结构）
+                }
+            }
+        }
+    },
+   "settings": {......}
+}
+
+
+```
+
 ##### article
 https://www.infoq.cn/article/wymrl5h80sfawg8u7ede
