@@ -71,5 +71,17 @@ public class MirrorTree {
         }
         return root;
     }
+
+    public TreeNode mirrorTree2(TreeNode root) {
+        if(root == null) return null;
+
+        TreeNode tmp = root.left;
+        root.left = mirrorTree(root.right);
+        root.right = mirrorTree(tmp);
+
+        return root;
+    }
+
+
 }
 //leetcode submit region end(Prohibit modification and deletion)
