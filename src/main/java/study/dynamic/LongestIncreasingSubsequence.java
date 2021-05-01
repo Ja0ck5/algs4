@@ -55,7 +55,7 @@ public class LongestIncreasingSubsequence {
             dp[i] = 1;
             for (int j = 0; j < i; j++) {
                 if (nums[j] < nums[i]) {
-                    dp[i] = dp[i] < dp[j] + 1 ? dp[j] + 1 : dp[i];
+                    dp[i] = Math.max(dp[i], dp[j] + 1);
                 }
             }
             if (max < dp[i]) {

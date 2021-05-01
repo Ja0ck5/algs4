@@ -60,7 +60,7 @@ import study.binarytree.TreeNode;
 public class SymmetricTree {
 
     public boolean isSymmetric(TreeNode root) {
-        return root == null ? true : recur(root.left, root.right);
+        return root == null || recur(root.left, root.right);
     }
     boolean recur(TreeNode L, TreeNode R) {
         if(L == null && R == null) return true;
