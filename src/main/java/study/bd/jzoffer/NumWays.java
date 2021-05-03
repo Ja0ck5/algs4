@@ -46,4 +46,15 @@ public class NumWays {
         }
         return ret;
     }
+
+    public int jumpFloor(int target) {
+        if(target == 0 || target == 1) return target;
+        int a = 1, b = 1, res = 0;
+        for(int i = 2; i <= target; i++){
+            res = a + b;
+            a = b;
+            b = res;
+        }
+        return res;
+    }
 }
