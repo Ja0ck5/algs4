@@ -1,4 +1,4 @@
-package study.binary;
+package study.bd;
 
 import java.util.Random;
 

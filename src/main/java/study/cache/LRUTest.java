@@ -1,8 +1,6 @@
 package study.cache;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class LRUTest {
 
@@ -70,6 +68,7 @@ public class LRUTest {
         head.next.prev = node;
         head.next = node;
         node.prev = head;
+        List<Integer> list = new ArrayList<>();
     }
 
 }
