@@ -19,9 +19,11 @@ public class LengthOfLongestSubstring {
 
     public int lengthOfLongestSubstring(String s) {
         Set<Character> set = new HashSet<>();
+        // 右指针，初始值为 -1，相当于我们在字符串的左边界的左侧，还没有开始移动
         int j = -1, ans = 0;
         for (int i = 0; i < s.length(); i++) {
             if (i != 0) {
+                // 左指针向右移动一格，移除一个字符
                 set.remove(s.charAt(i - 1));
             }
 
