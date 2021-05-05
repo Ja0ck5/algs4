@@ -1,4 +1,4 @@
-package study.bd;
+package study.bd.vip;
 
 import study.linkedlist.ListNode;
 
