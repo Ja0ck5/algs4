@@ -1,5 +1,7 @@
 package study.sort;
 
+import java.util.Arrays;
+
 /**
  * @author liyanjie
  * @createTime 2021-04-14 19:02
@@ -17,10 +19,18 @@ public class MergeSort {
         // merge back to a[]
         int i = lo, j = mid+1;
         for (int k = lo; k <= hi; k++) {
-            if      (i > mid)              a[k] = aux[j++];
-            else if (j > hi)               a[k] = aux[i++];
-            else if (less(aux[j], aux[i])) a[k] = aux[j++];
-            else                           a[k] = aux[i++];
+            if      (i > mid)              {
+                a[k] = aux[j++];
+            }
+            else if (j > hi){
+                a[k] = aux[i++];
+            }
+            else if (less(aux[j], aux[i])) {
+                a[k] = aux[j++];
+            }
+            else{
+                a[k] = aux[i++];
+            }
         }
 
     }
@@ -48,6 +58,11 @@ public class MergeSort {
     }
 
 
+    public static void main(String[] args) {
+        int[] a = {3,5,7,4,9,8,2};
+        sort(a);
+        System.out.println(Arrays.toString(a));
+    }
 
 
 }
