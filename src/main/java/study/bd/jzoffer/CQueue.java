@@ -37,7 +37,9 @@ import java.util.Stack;
  *  * Your CQueue object will be instantiated and called as such:
  *  * CQueue obj = new CQueue();
  *  * obj.appendTail(value);
- *  * int param_2 = obj.deleteHead();
+ *  *
+ *  https://github.com/afatcoder/LeetcodeTop/blob/master/bytedance/backend.md
+ *  int param_2 = obj.deleteHead();
  *  */
 
 class CQueue {
