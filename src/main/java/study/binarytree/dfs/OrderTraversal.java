@@ -1,5 +1,7 @@
 package study.binarytree.dfs;
 
+import java.util.Deque;
+import java.util.LinkedList;
 import study.binarytree.TreeNode;
 
 import java.util.ArrayList;
@@ -59,6 +61,26 @@ public class OrderTraversal {
             }
         }
         return results;
+    }
+
+    public List<Integer> preorderTraversal3(TreeNode root) {
+        List<Integer> res = new ArrayList<>();
+        if (root == null) {
+            return res;
+        }
+
+        Deque<TreeNode> stack = new LinkedList<>();
+        TreeNode node = root;
+        while (!stack.isEmpty() || node != null) {
+            while (node != null) {
+                res.add(node.val);
+                stack.push(node);
+                node = node.left;
+            }
+            node = stack.pop();
+            node = node.right;
+        }
+        return res;
     }
 
 
