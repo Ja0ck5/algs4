@@ -15,7 +15,7 @@ class Element {
 
 public class MergeKSortedArray {
 
-    private Comparator<Element> ec = Comparator.comparingInt(left -> left.val);
+    private Comparator<Element> ec = Comparator.comparingInt(e -> e.val);
     
     /**
      * Nlogk
