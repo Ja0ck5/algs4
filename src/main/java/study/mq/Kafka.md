@@ -676,3 +676,28 @@ Kafka 并不支持主写从读，因为主写从读有 2 个很明 显的缺点:
 
 
 
+### 2种leader
+从上面的基本概念可以看出在kafka集群中有2个种leader，一种是broker的leader即controller leader，还有一种就是partition的leader，下面介绍一下2种leader的选举大致流程。
+
+Controller leader
+当broker启动的时候，都会创建KafkaController对象，但是集群中只能有一个leader对外提供服务，这些每个节点上的KafkaController会在指定的zookeeper路径下创建临时节点，只有第一个成功创建的节点的KafkaController才可以成为leader，其余的都是follower。当leader故障后，所有的follower会收到通知，再次竞争在该路径下创建节点从而选举新的leader
+
+Partition leader 
+ 由controller leader执行
+
+从Zookeeper中读取当前分区的所有ISR(in-sync replicas)集合
+调用配置的分区选择算法选择分区的leader
+如何处理所有Replica都不工作？
+
+在ISR中至少有一个follower时，Kafka可以确保已经commit的数据不丢失，但如果某个Partition的所有Replica都宕机了，就无法保证数据不丢失了。这种情况下有两种可行的方案：
+
+等待ISR中的任一个Replica“活”过来，并且选它作为Leader
+选择第一个“活”过来的Replica（不一定是ISR中的）作为Leader
+    这就需要在可用性和一致性当中作出一个简单的折衷。如果一定要等待ISR中的Replica“活”过来，那不可用的时间就可能会相对较长。而且如果ISR中的所有Replica都无法“活”过来了，或者数据都丢失了，这个Partition将永远不可用。选择第一个“活”过来的Replica作为Leader，而这个Replica不是ISR中的Replica，那即使它并不保证已经包含了所有已commit的消息，它也会成为Leader而作为consumer的数据源（前文有说明，所有读写都由Leader完成）。Kafka0.8.*使用了第二种方式。根据Kafka的文档，在以后的版本中，Kafka支持用户通过配置选择这两种方式中的一种，从而根据不同的使用场景选择高可用性还是强一致性。 unclean.leader.election.enable 参数决定使用哪种方案，默认是true，采用第二种方案
+
+producer 的写入流程
+producer 先从 zookeeper 的 "/brokers/.../state" 节点找到该 partition 的 leader 
+producer 将消息发送给该 leader 
+leader 将消息写入本地 log 
+followers 从 leader pull 消息，写入本地 log 后 leader 发送 ACK 
+leader 收到所有 ISR 中的 replica 的 ACK 后，增加 HW（high watermark，最后 commit 的 offset） 并向 producer 发送 ACK
