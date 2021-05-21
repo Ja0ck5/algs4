@@ -701,3 +701,16 @@ producer 将消息发送给该 leader
 leader 将消息写入本地 log 
 followers 从 leader pull 消息，写入本地 log 后 leader 发送 ACK 
 leader 收到所有 ISR 中的 replica 的 ACK 后，增加 HW（high watermark，最后 commit 的 offset） 并向 producer 发送 ACK
+
+
+
+### Kafka快的原因：
+1、partition顺序读写，充分利用磁盘特性，这是基础；
+2、Producer生产的数据持久化到broker，采用mmap文件映射，实现顺序的快速写入；
+3、Customer从broker读取数据，采用sendfile，将磁盘文件读到OS内核缓冲区后，直接转到socket buffer进行网络发送。
+
+### mmap 和 sendfile总结
+1、都是Linux内核提供、实现零拷贝的API；
+2、sendfile 是将读到内核空间的数据，转到socket buffer，进行网络发送；
+3、mmap将磁盘文件映射到内存，支持读和写，对内存的操作会反映在磁盘文件上。
+RocketMQ 在消费消息时，使用了 mmap。kafka 使用了 sendFile。
